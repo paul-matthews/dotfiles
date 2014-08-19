@@ -1,14 +1,15 @@
+# Config template
+#
 # Local/private config goes in the include
 [include]
         path = ~/.gitconfig.local
 [hub]
         protocol = https
-[alias]
-        co = checkout
-        promote = !$ZSH/bin/git-promote
-        wtf     = !$ZSH/bin/git-wtf
-        rank-contributors = !$ZSH/bin/git-rank-contributors
-        count   = !git shortlog -sn
+[user]
+        name = AUTHORNAME
+        email = AUTHOREMAIL
+[credential]
+        helper = GIT_CREDENTIAL_HELPER
 [color]
         diff = auto
         status = auto
@@ -31,3 +32,55 @@
         #
         # Setting to git 2.0 default to suppress warning message
         default = simple
+
+[alias]
+        co              = checkout
+        promote         = !$ZSH/bin/git-promote
+        wtf             = !$ZSH/bin/git-wtf
+        rank-contributors = !$ZSH/bin/git-rank-contributors
+        count           = !git shortlog -sn
+        d               = difftool
+        br              = branch
+        cb              = checkout -b
+        ci              = commit
+        co              = checkout
+        coh             = !git checkout-head
+        dc              = svn dcommit
+        dcommit         = svn dcommit
+        fa              = !git fetch-all
+        gh              = !git get-head
+        gha             = !git get-head-all
+        ghr             = !git get-head-remote
+        last            = log -1 HEAD
+        lg              = log --graph --pretty=format:'%Cred%h%Creset -%C(yellow)%d%Creset %s %Cgreen(%cr) %C(bold blue)<%an>%Creset' --abbrev-commit --date=relative --all
+        log1            = log --pretty=format:'%Cred%h%Creset -%C(yellow)%d%Creset %s %Cgreen(%cr) %C(bold blue)<%an>%Creset' --abbrev-commit --date=relative --all
+        nm              = branch -a --no-merge
+        m               = !git st -s -uno | cut -c4- | xargs mvim
+        mvd             = !git mvim-diff
+        mvdi            = !git mvim-diverge
+        pf              = pull --ff-only
+        pu              = pull
+        scoh            = !git submodule-checkout-head
+        sf              = !git submodule-foreach
+        sfa             = !git submodule-foreach-fetch-all
+        sfb             = !git submodule-foreach-branch
+        st              = status
+        su              = branch --set-upstream
+        up              = svn rebase
+        amend           = commit --amend
+        checkout-head   = !git checkout `git get-head`
+        fetch-all       = !git fetch --all
+        get-branch      = !git branch | grep '*' | cut -b 3-
+        get-head-all    = !git branch --no-color --contains HEAD | grep -v '(no branch)'
+        get-head        = !git branch --no-color --contains HEAD | grep -v '(no branch)' | head -n 1 | cut -b 3-
+        get-head-remote = !git branch -a --no-color --contains HEAD | grep -v '(no branch)' | grep 'remote' | head -n 1 | cut -b 11- | sed -E 's/^([^\\/]+\\/.*)$/\\1/'
+        submodule-checkout-head = !git submodule-foreach git checkout-head
+        submodule-foreach = submodule foreach
+        submodule-foreach-fetch-all = !git submodule foreach git fetch --all
+        submodule-foreach-branch = !git submodule-foreach git get-branch
+
+        unstage         = reset HEAD --
+        diverges        = !sh -c 'git rev-list --boundary $1...$2 | grep ^- | cut -c2-'
+        diff-name       = !git diff --name-only
+        mvim-diff       = "!f() { git-diff --name-only $1 | xargs mvim; }; f"
+        mvim-diverge    = "!f() { git diverges HEAD $1 | xargs git mvim-diff; }; f"
