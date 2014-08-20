@@ -1,7 +1,6 @@
 {
   "bold_folder_labels": true,
   "caret_style": "phase",
-  "color_scheme": "Packages/User/cobalt2 (SL).tmTheme",
   "ensure_newline_at_eof_on_save": true,
   "fade_fold_buttons": false,
   "file_exclude_patterns":
@@ -68,7 +67,8 @@
   "sublimelinter_gutter_marks": false,
   "sublimelinter_popup_errors_on_save": false,
   "tab_size": 2,
-  "theme": "Cobalt2.sublime-theme",
+  "theme": "Spacegray.sublime-theme",
+  "color_scheme": "Packages/Theme - Spacegray/base16-ocean.dark.tmTheme",
   "translate_tabs_to_spaces": true,
   "tree_animation_enabled": false,
   "use_simple_full_screen": true
