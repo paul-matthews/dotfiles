@@ -1,8 +1,20 @@
-ts=`date +%s`
-fmt="$1-$ts.png"
+#!/bin/bash
 
-adb shell screencap -p /sdcard/screen.png
-adb pull /sdcard/screen.png
-adb shell rm /sdcard/screen.png
+DEVICE_STRING=""
+# Get options
+while getopts "s:" opt; do
+    case $opt in
+        s) DEVICE_STRING="-s $OPTARG" ;;
+    esac
+done
 
-mv screen.png "$fmt"
+ARG1=${@:$OPTIND:1}
+TS=`date +%s`
+FMT="${ARG1:-screenshot}-$TS.png"
+
+adb $DEVICE_STRING shell screencap -p /sdcard/screen.png
+adb $DEVICE_STRING pull /sdcard/screen.png
+adb $DEVICE_STRING shell rm /sdcard/screen.png
+
+mv screen.png "$FMT"
+echo "Screenshot generated: $FMT"
