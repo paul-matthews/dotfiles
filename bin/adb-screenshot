@@ -1,20 +1,76 @@
 #!/bin/bash
 
 DEVICE_STRING=""
+MULTI=false
+ADB_CMD=`which adb`
+
 # Get options
-while getopts "s:" opt; do
+while getopts "s:m" opt; do
     case $opt in
         s) DEVICE_STRING="-s $OPTARG" ;;
+        m) MULTI=true ;;
     esac
 done
 
 ARG1=${@:$OPTIND:1}
+
 TS=`date +%s`
-FMT="${ARG1:-screenshot}-$TS.png"
+PATH="/sdcard/screencap-$TS"
+OUT_FILENAME="${ARG1:-screenshot}"
 
-adb $DEVICE_STRING shell screencap -p /sdcard/screen.png
-adb $DEVICE_STRING pull /sdcard/screen.png
-adb $DEVICE_STRING shell rm /sdcard/screen.png
+function captureScreenshot {
+  MKDIR="mkdir -p $PATH"
+  ADB_MKDIR="$ADB_CMD $DEVICE_STRING shell $MKDIR"
+  SCREENSHOT_FMT="screencap -p $PATH/%s-%s-%s.png"
+  ADB_SCREENSHOT_FMT="$ADB_CMD $DEVICE_STRING shell $SCREENSHOT_FMT"
 
-mv screen.png "$FMT"
-echo "Screenshot generated: $FMT"
+  ARG="${1-1}"
+  ADB_SCREENSHOT=`printf "$ADB_SCREENSHOT_FMT" $OUT_FILENAME $TS $ARG`
+
+  eval "$ADB_MKDIR"
+  eval "$ADB_SCREENSHOT"
+  return
+}
+
+function getScreenshots {
+  ADB_PULL="$ADB_CMD $DEVICE_STRING pull $PATH"
+  RMDIR="rm -rf $PATH"
+  ADB_RMDIR="$ADB_CMD $DEVICE_STRING shell $RMDIR"
+
+  ARG="${1-1}"
+  if [ $ARG -lt 1 ]; then
+    return 1
+  fi
+
+  eval $ADB_PULL
+  eval $ADB_RMDIR
+  return
+}
+
+index=0
+if [ $MULTI == false ]; then
+  index=1
+  if ! captureScreenshot $index; then
+    index=$((index-1))
+  fi
+else
+  while $MULTI; do
+    echo "Pull screenshot (y|n)? : "
+    read aok
+    if [ $aok == "y" ]; then
+      index=$((index+1))
+      if ! captureScreenshot $index; then
+        index=$((index-1))
+      fi
+    else
+      MULTI=false
+      continue
+    fi
+  done
+fi
+
+if getScreenshots $index; then
+  echo "Processed $index screenshots"
+else
+  echo "Unable to process screenshots"
+fi
