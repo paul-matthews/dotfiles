@@ -5,11 +5,6 @@
         path = ~/.gitconfig.local
 [hub]
         protocol = https
-[user]
-        name = AUTHORNAME
-        email = AUTHOREMAIL
-[credential]
-        helper = GIT_CREDENTIAL_HELPER
 [color]
         diff = auto
         status = auto
@@ -34,7 +29,6 @@
         default = simple
 
 [alias]
-        co              = checkout
         promote         = !$ZSH/bin/git-promote
         wtf             = !$ZSH/bin/git-wtf
         rank-contributors = !$ZSH/bin/git-rank-contributors
