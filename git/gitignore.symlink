@@ -3,6 +3,7 @@
 
 .gradle
 .DS_Store
+*.pyc
 
 # built application files
 *.apk
@@ -44,3 +45,4 @@ project.properties
 ##Gradle-based build
 .gradle
 build/
+google-services.json
