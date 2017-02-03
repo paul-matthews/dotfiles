@@ -33,3 +33,8 @@ alias -g L="| less"
 
 # copy with a progress bar.
 alias cpv="rsync -poghb --backup-dir=/tmp/rsync -e /dev/null --progress --"
+
+
+function logcat() {
+  adb logcat | grep `adb shell ps | egrep "\b$1\b" | cut -c10-15`
+}
