@@ -78,3 +78,5 @@
         diff-name       = !git diff --name-only
         mvim-diff       = "!f() { git-diff --name-only $1 | xargs mvim; }; f"
         mvim-diverge    = "!f() { git diverges HEAD $1 | xargs git mvim-diff; }; f"
+[pull]
+	rebase = false
