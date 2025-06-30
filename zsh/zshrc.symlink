@@ -1,38 +1,114 @@
-# shortcut to this dotfiles path is $ZSH
-export ZSH=$HOME/.dotfiles
+#==============================================================================
+# Zsh Configuration - Refactored by Gemini
+#
+# This configuration uses Antigen, a plugin manager for Zsh, to simplify
+# the management of plugins, themes, and completions.
+#==============================================================================
 
-# your project folder that we can `c [tab]` to
-export PROJECTS=~/Code
+#==============================================================================
+# Antigen (Plugin Manager)
+#==============================================================================
 
-# all of our zsh files
-typeset -U config_files
-config_files=($ZSH/**/*.zsh)
+# Load Antigen
+source ~/.dotfiles/zsh/antigen.zsh
 
-# load the path files
-for file in ${(M)config_files:#*/path.zsh}
-do
-  source $file
-done
+# Load the oh-my-zsh library
+antigen use oh-my-zsh
 
-# load everything but the path and completion files
-for file in ${${config_files:#*/path.zsh}:#*/completion.zsh}
-do
-  source $file
-done
+#==============================================================================
+# Plugins
+#==============================================================================
 
-# initialize autocomplete here, otherwise functions won't be loaded
-autoload -U compinit
-compinit
+# Syntax highlighting
+antigen bundle zsh-users/zsh-syntax-highlighting
 
-# load every completion after autocomplete loads
-for file in ${(M)config_files:#*/completion.zsh}
-do
-  source $file
-done
+# Auto-suggestions
+antigen bundle zsh-users/zsh-autosuggestions
 
-unset config_files
+# History search
+antigen bundle zsh-users/zsh-history-substring-search
 
-test -e "${HOME}/.iterm2_shell_integration.zsh" && source "${HOME}/.iterm2_shell_integration.zsh"
+#==============================================================================
+# Theme
+#==============================================================================
+
+# Load a theme
+antigen theme robbyrussell
+
+#==============================================================================
+# Configuration
+#==============================================================================
+
+# History
+HISTFILE=~/.zsh_history
+HISTSIZE=10000
+SAVEHIST=10000
+setopt APPEND_HISTORY
+setopt INC_APPEND_HISTORY
+setopt SHARE_HISTORY
+setopt HIST_IGNORE_ALL_DUPS
+setopt HIST_REDUCE_BLANKS
+
+# Editor
+export EDITOR='vim'
+
+#==============================================================================
+# Aliases
+#==============================================================================
+
+alias reload!='. ~/.zshrc'
+alias cls='clear'
+alias mv='nocorrect mv'
+alias cp='nocorrect cp'
+alias mkdir='nocorrect mkdir'
+alias pu=pushd
+alias po=popd
+alias d='dirs -v'
+alias h=history
+alias grep=egrep
+alias ll='ls -l'
+alias la='ls -a'
+alias lsd='ls -ld *(-/DN)'
+alias lsa='ls -ld .*'
+alias gvimdiff="mvimdiff"
+alias vim="vim -p"
+alias -g M='| more'
+alias -g H='| head'
+alias -g T='| tail'
+alias -g L='| less'
+alias -g G="| grep"
+alias cpv="rsync -poghb --backup-dir=/tmp/rsync -e /dev/null --progress --"
+
+#==============================================================================
+# Functions
+#==============================================================================
+
+# Change directory to a project folder
+c() {
+  cd "$PROJECTS/$1"
+}
+
+# Define completion for the 'c' function
+_c_complete() {
+  # Get a list of directories inside the PROJECTS folder
+  local projects
+  projects=(${(f)"$(ls -d $PROJECTS/*/)"})
+  # Reply with the directory names, without the trailing slash
+  reply=(${projects[@]:t:r})
+}
+
+# Register the completion function for the 'c' command
+compctl -K _c_complete c
+
+#==============================================================================
+# Apply Antigen Configuration
+#==============================================================================
+
+antigen apply
+
+#==============================================================================
+# Local Configuration
+#================================E==============================================
 
 # Stash your environment variables in ~/.localrc. This means they'll stay out
 # of your main dotfiles repository (which may be public, like this one), but
@@ -41,4 +117,3 @@ if [[ -a ~/.localrc ]]
 then
   source ~/.localrc
 fi
-

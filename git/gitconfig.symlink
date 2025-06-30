@@ -27,7 +27,6 @@
         #
         # Setting to git 2.0 default to suppress warning message
         default = simple
-
 [alias]
         promote         = !$ZSH/bin/git-promote
         wtf             = !$ZSH/bin/git-wtf
@@ -80,3 +79,10 @@
         mvim-diverge    = "!f() { git diverges HEAD $1 | xargs git mvim-diff; }; f"
 [pull]
 	rebase = false
+[credential]
+	helper = osxkeychain
+[diff "spaceman-diff"]
+  command = /opt/homebrew/bin/spaceman-diff
+
+[init]
+	defaultBranch = main
