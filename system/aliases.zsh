@@ -9,5 +9,5 @@ then
   alias la='gls -A --color'
 fi
 
-# Cheatsheet
-alias cheat='bat ~/.dotfiles/CHEATSHEET.md --style=plain'
+# Cheatsheet (colored script in bin/, markdown in CHEATSHEET.md for GitHub)
+alias cheat='$ZSH/bin/cheat | less -R'

@@ -1,0 +1,150 @@
+#!/bin/bash
+# Dotfiles cheatsheet — colored for dark terminals
+
+# Colors
+R=$'\033[0m'        # reset
+B=$'\033[1m'        # bold
+D=$'\033[2m'        # dim
+C=$'\033[1;36m'     # bold cyan — commands
+Y=$'\033[33m'       # yellow — arguments/params
+G=$'\033[32m'       # green — descriptions
+M=$'\033[1;35m'     # bold magenta — headers
+H=$'\033[1;37m'     # bold white — sub-headers
+S=$'\033[2;37m'     # dim white — separators/lines
+W=$'\033[37m'       # white — flow text
+
+cat <<EOF
+
+${M}🔍 Navigation & Search${R}
+${S}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${R}
+${C}z${R} ${Y}<partial>${R}                ${G}smart cd — learns from usage (zoxide)${R}
+${C}c${R} ${Y}<project>${R}                ${G}cd ~/src/<project>${R}
+${C}Ctrl-T${R}                     ${G}fzf: fuzzy file picker (inserts path at cursor)${R}
+${C}Ctrl-R${R}                     ${G}fzf: fuzzy history search${R}
+${C}Alt-C${R}                      ${G}fzf: fuzzy cd into subdirectory${R}
+${C}rg${R} ${Y}<pattern>${R}               ${G}ripgrep: fast recursive grep (respects .gitignore)${R}
+${C}fd${R} ${Y}<pattern>${R}               ${G}fd: fast find by filename${R}
+
+
+${M}🌿 Git${R}
+${S}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${R}
+
+  ${H}Status & Info${R}                                  ${H}Modify & Commit${R}
+  ${S}────────────────────────────────────${R}            ${S}────────────────────────────────────${R}
+  ${C}gs${R}              ${G}status -sb${R}                      ${C}gc${R}              ${G}commit${R}
+  ${C}gd${R}              ${G}diff (color)${R}                    ${C}gca${R}             ${G}commit -a${R}
+  ${C}glog${R}            ${G}pretty log graph${R}                ${C}gac${R} ${Y}"msg"${R}       ${G}add all + commit${R}
+  ${C}git last${R}        ${G}log -1 HEAD${R}                     ${C}git amend${R}       ${G}commit --amend${R}
+  ${C}git lg${R}          ${G}log graph (all branches)${R}        ${C}git unstage${R}     ${G}reset HEAD --${R}
+  ${C}git count${R}       ${G}shortlog -sn${R}                    ${C}lazygit${R}         ${G}full git TUI${R}
+
+  ${H}Navigate & Sync${R}
+  ${S}────────────────────────────────────${R}
+  ${C}gl${R}              ${G}pull --prune${R}                    ${C}gco${R} ${Y}<branch>${R}    ${G}checkout${R}
+  ${C}gp${R}              ${G}push origin HEAD${R}                ${C}gb${R}              ${G}branch${R}
+  ${C}git up${R}          ${G}pull --rebase --autostash${R}       ${C}git cb${R} ${Y}<name>${R}   ${G}checkout -b${R}
+  ${C}git pf${R}          ${G}pull --ff-only${R}                  ${C}gcb${R}             ${G}copy branch name${R}
+
+
+${M}🌳 Git Worktrees${R}
+${S}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${R}
+
+  ${D}Worktrees let you work on multiple branches simultaneously — each in its own directory.${R}
+  ${D}All worktrees share the same .git, so commits are visible across them.${R}
+
+  ${S}~/src/pico/cosmic-clock/  ${W}(main repo)${R}           ${C}gwm${R} ${G}← jump back here${R}
+  ${S}    │${R}
+  ${S}    ├── ${R}${C}gwa feat-a${R} ${S}──→${R} ${W}~/src/.worktrees/cosmic-clock--feat-a/${R}    ${D}Tab 1: you or Claude${R}
+  ${S}    │${R}
+  ${S}    └── ${R}${C}gwa feat-b${R} ${S}──→${R} ${W}~/src/.worktrees/cosmic-clock--feat-b/${R}    ${D}Tab 2: another Claude${R}
+
+  ${H}Commands${R}
+  ${S}────────────────────────────────────${R}
+  ${C}gwa${R} ${Y}<branch>${R}        ${G}create new branch + worktree, cd into it${R}
+  ${C}gwc${R} ${Y}<branch>${R}        ${G}checkout existing branch into worktree${R}
+  ${C}gwj${R}                 ${G}fzf jump to any worktree${R}
+  ${C}gwm${R}                 ${G}jump back to main repo${R}
+  ${C}gwl${R}                 ${G}list all worktrees${R}
+  ${C}gwr${R} ${Y}<path>${R}          ${G}remove a worktree${R}
+  ${C}gwp${R}                 ${G}prune stale worktrees${R}
+
+
+${M}🤖 Claude CLI${R}
+${S}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${R}
+
+  ${D}Each Claude session auto-gets a unique tab color from a rotating palette.${R}
+  ${D}Tab title shows: Claude: <project> [branch]${R}
+
+  ${H}Tab Colors${R} ${D}(iTerm2 — auto-rotates shade per tab)${R}
+  ${S}────────────────────────────────────${R}
+  ${C}tabcolor claude${R}         ${G}orange shades + CLAUDE badge${R}
+  ${C}tabcolor cosmic${R}         ${G}purple/blue shades + PICO badge${R}
+  ${C}tabcolor dotfiles${R}       ${G}green shades + SYS badge${R}
+  ${C}tabcolor android${R}        ${G}teal shades + ANDROID badge${R}
+  ${C}tabcolor danger${R}         ${G}red + PROD badge${R}
+  ${C}tabcolor reset${R}          ${G}back to default${R}
+
+
+${M}🔧 Dotfiles & Tools${R}
+${S}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${R}
+
+  ${C}dot${R}                     ${G}update dotfiles + brew + defaults${R}
+  ${C}reload!${R}                 ${G}source ~/.zshrc${R}
+  ${C}sync-upstream${R}           ${G}rebase your changes onto holman/master${R}
+  ${C}pubkey${R}                  ${G}copy Ed25519 SSH public key to clipboard${R}
+  ${C}cheat${R}                   ${G}show this cheatsheet${R}
+
+  ${H}Reading Files${R}
+  ${S}────────────────────────────────────${R}
+  ${C}bat${R} ${Y}<file>${R}              ${G}cat with syntax highlighting + line numbers${R}
+  ${C}bat -l json${R} ${Y}<file>${R}      ${G}pretty-print JSON${R}
+  ${C}delta${R}                   ${G}better git diffs (automatic via gitconfig)${R}
+
+
+${M}🐚 Shell${R}
+${S}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${R}
+
+  ${C}d${R}                       ${G}dirs -v (directory stack)${R}
+  ${C}pu${R} / ${C}po${R}                 ${G}pushd / popd${R}
+  ${C}cls${R}                     ${G}clear${R}
+  ${C}cpv${R} ${Y}<src> <dst>${R}         ${G}rsync with progress${R}
+
+
+${M}🚀 Cosmic Clock${R} ${D}(commands available everywhere, uses direnv for PATH/env)${R}
+${S}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${R}
+
+  ${C}cpush${R}                   ${G}cosmic-push (upload to Pico)${R}
+  ${C}cbuild${R}                  ${G}full build with lint + vet${R}
+  ${C}cbq${R}                     ${G}quick build (skip lint)${R}
+  ${C}cbp upload${R}              ${G}build + push in one step${R}
+  ${C}clogs${R}                   ${G}cosmic-logs${R}
+  ${C}ctime${R}                   ${G}cosmic-logs -l timeline${R}
+
+
+${M}⌨️  Keyboard${R} ${D}(zsh vi mode)${R}
+${S}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${R}
+
+  ${C}ESC${R}                     ${G}enter normal mode${R}
+  ${C}/pattern${R}                ${G}search command history${R}
+  ${C}v${R}                       ${G}edit current command in \$EDITOR${R}
+  ${C}Ctrl-A${R} / ${C}Ctrl-E${R}        ${G}beginning / end of line${R}
+
+
+${M}✏️  Vim${R}
+${S}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${R}
+
+  ${H}Fuzzy Finder${R}                                   ${H}Editing${R}
+  ${S}────────────────────────────────────${R}            ${S}────────────────────────────────────${R}
+  ${C},f${R}              ${G}fzf files${R}                       ${C}gcc${R}             ${G}toggle comment${R}
+  ${C},r${R}              ${G}fzf ripgrep${R}                     ${C}cs'\"${R}            ${G}change surround ' → "${R}
+  ${C},b${R}              ${G}fzf buffers${R}                     ${C}ds\"${R}             ${G}delete surrounding "${R}
+  ${C},g${R}              ${G}git changed files${R}               ${C}ysiw\"${R}           ${G}surround word with "${R}
+
+  ${H}Navigation${R}                                     ${H}Git (fugitive)${R}
+  ${S}────────────────────────────────────${R}            ${S}────────────────────────────────────${R}
+  ${C},n${R}              ${G}NERDTree toggle${R}                 ${C},gs${R}             ${G}git status${R}
+  ${C}gd${R}              ${G}go to definition (CoC)${R}          ${C},w${R}              ${G}save${R}
+  ${C}]q${R} / ${C}[q${R}          ${G}next/prev quickfix${R}              ${C},q${R}              ${G}quit${R}
+  ${C}]b${R} / ${C}[b${R}          ${G}next/prev buffer${R}                ${C},ev${R}             ${G}edit vimrc${R}
+
+EOF
