@@ -90,9 +90,13 @@ if filereadable(expand('~/.vim/autoload/plug.vim'))
   Plug 'scrooloose/nerdtree'
   nnoremap <leader>n :NERDTreeToggle<CR>
 
-  " Git integration
+  " Essential tpope plugins
   Plug 'tpope/vim-fugitive'
-  nnoremap <leader>gs :Gstatus<CR>
+  Plug 'tpope/vim-surround'
+  Plug 'tpope/vim-commentary'
+  Plug 'tpope/vim-repeat'
+  Plug 'tpope/vim-unimpaired'
+  nnoremap <leader>gs :Git<CR>
 
   " Enhanced status line
   Plug 'vim-airline/vim-airline'
@@ -101,6 +105,14 @@ if filereadable(expand('~/.vim/autoload/plug.vim'))
   let g:airline_powerline_fonts = 1
   let g:airline#extensions#tabline#enabled = 1
 
+
+  " Fuzzy finder
+  Plug 'junegunn/fzf', { 'do': { -> fzf#install() } }
+  Plug 'junegunn/fzf.vim'
+  nnoremap <leader>f :Files<CR>
+  nnoremap <leader>b :Buffers<CR>
+  nnoremap <leader>r :Rg<CR>
+  nnoremap <leader>g :GFiles?<CR>
 
   " Language Server Protocol (LSP) for code intelligence
   " Requires Node.js and yarn/npm to be installed
@@ -129,6 +141,13 @@ endif
 if (has("termguicolors"))
   set termguicolors
 endif
+
+"==============================================================================
+" Persistent Undo
+"==============================================================================
+
+set undofile
+set undodir=~/.vim/undodir
 
 "==============================================================================
 " Language-Specific Settings

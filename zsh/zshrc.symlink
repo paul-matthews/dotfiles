@@ -9,11 +9,12 @@
 # Antigen (Plugin Manager)
 #==============================================================================
 
-# Load Antigen
-source ~/.dotfiles/zsh/antigen.zsh
+# Load Antigen (only once — re-sourcing causes prompt issues)
+if [[ -z "$_ANTIGEN_LOADED" ]]; then
+  source ~/.dotfiles/zsh/antigen.zsh
 
-# Load the oh-my-zsh library
-antigen use oh-my-zsh
+  # Load the oh-my-zsh library
+  antigen use oh-my-zsh
 
 #==============================================================================
 # Plugins
@@ -41,16 +42,24 @@ antigen theme robbyrussell
 
 # History
 HISTFILE=~/.zsh_history
-HISTSIZE=10000
-SAVEHIST=10000
+HISTSIZE=100000
+SAVEHIST=100000
 setopt APPEND_HISTORY
 setopt INC_APPEND_HISTORY
 setopt SHARE_HISTORY
 setopt HIST_IGNORE_ALL_DUPS
 setopt HIST_REDUCE_BLANKS
+setopt HIST_IGNORE_SPACE        # commands starting with space aren't recorded (secrets!)
+setopt HIST_VERIFY              # show expanded history command before executing
+setopt AUTO_CD                  # cd by typing directory name
+setopt AUTO_PUSHD               # push dirs onto stack automatically
+setopt PUSHD_IGNORE_DUPS        # no duplicates in dir stack
+setopt EXTENDED_GLOB            # advanced globbing
+setopt NO_BEEP                  # silence
 
 # Editor
 export EDITOR='vim'
+bindkey -v
 
 #==============================================================================
 # Aliases
@@ -66,8 +75,7 @@ alias po=popd
 alias d='dirs -v'
 alias h=history
 alias grep=egrep
-alias ll='ls -l'
-alias la='ls -a'
+# ll and la defined in system/aliases.zsh (gls versions with color)
 alias lsd='ls -ld *(-/DN)'
 alias lsa='ls -ld .*'
 alias gvimdiff="mvimdiff"
@@ -104,7 +112,30 @@ compctl -K _c_complete c
 # Apply Antigen Configuration
 #==============================================================================
 
-antigen apply
+  antigen apply
+  _ANTIGEN_LOADED=1
+fi
+
+#==============================================================================
+# Dotfiles Topic Loader
+#==============================================================================
+
+# Set $ZSH to the dotfiles root (used by topic files and bin scripts)
+export ZSH="$HOME/.dotfiles"
+
+# Load path files first (*/path.zsh), then everything else (*.zsh),
+# skipping completion.zsh files (handled by Antigen).
+for file in $ZSH/*/path.zsh(N); do
+  source "$file"
+done
+
+for file in $ZSH/**/*.zsh(N); do
+  [[ "$file" == */path.zsh ]] && continue
+  [[ "$file" == */completion.zsh ]] && continue
+  [[ "$file" == */zshrc.symlink ]] && continue
+  [[ "$file" == */antigen.zsh ]] && continue
+  source "$file"
+done
 
 #==============================================================================
 # Local Configuration
@@ -117,3 +148,27 @@ if [[ -a ~/.localrc ]]
 then
   source ~/.localrc
 fi
+
+export NVM_DIR="$HOME/.nvm"
+[ -s "/opt/homebrew/opt/nvm/nvm.sh" ] && \. "/opt/homebrew/opt/nvm/nvm.sh"
+[ -s "/opt/homebrew/opt/nvm/etc/bash_completion.d/nvm" ] && \. "/opt/homebrew/opt/nvm/etc/bash_completion.d/nvm"
+
+#==============================================================================
+# Tool Integrations (fzf, zoxide, direnv)
+#==============================================================================
+
+# fzf — fuzzy finder (Ctrl-R history, Ctrl-T files, Alt-C cd)
+if (( $+commands[fzf] )); then
+  source <(fzf --zsh)
+fi
+
+# zoxide — smarter cd (use 'z' instead of 'cd')
+if (( $+commands[zoxide] )); then
+  eval "$(zoxide init zsh)"
+fi
+
+# direnv — per-project environment (must be last hook)
+if (( $+commands[direnv] )); then
+  eval "$(direnv hook zsh)"
+fi
+

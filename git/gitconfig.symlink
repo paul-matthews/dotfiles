@@ -3,8 +3,14 @@
 # Local/private config goes in the include
 [include]
         path = ~/.gitconfig.local
-[hub]
-        protocol = https
+[gpg]
+        format = ssh
+[user]
+        signingkey = ~/.ssh/id_ed25519.pub
+[commit]
+        gpgsign = true
+[tag]
+        gpgsign = true
 [color]
         diff = auto
         status = auto
@@ -38,8 +44,6 @@
         ci              = commit
         co              = checkout
         coh             = !git checkout-head
-        dc              = svn dcommit
-        dcommit         = svn dcommit
         fa              = !git fetch-all
         gh              = !git get-head
         gha             = !git get-head-all
@@ -59,7 +63,7 @@
         sfb             = !git submodule-foreach-branch
         st              = status
         su              = branch --set-upstream
-        up              = svn rebase
+        up              = pull --rebase --autostash
         amend           = commit --amend
         checkout-head   = !git checkout `git get-head`
         fetch-all       = !git fetch --all
@@ -78,11 +82,39 @@
         mvim-diff       = "!f() { git-diff --name-only $1 | xargs mvim; }; f"
         mvim-diverge    = "!f() { git diverges HEAD $1 | xargs git mvim-diff; }; f"
 [pull]
-	rebase = false
+	rebase = true
+[rebase]
+	autoStash = true
+[merge]
+	conflictstyle = zdiff3
+[diff]
+	algorithm = histogram
+	colorMoved = default
+[rerere]
+	enabled = true
+[fetch]
+	prune = true
 [credential]
 	helper = osxkeychain
-[diff "spaceman-diff"]
-  command = /opt/homebrew/bin/spaceman-diff
+[core]
+	pager = delta
+[interactive]
+	diffFilter = delta --color-only
+[delta]
+	navigate = true
+	side-by-side = true
+	line-numbers = true
 
 [init]
 	defaultBranch = main
+[credential "https://github.com"]
+	helper = 
+	helper = !/opt/homebrew/bin/gh auth git-credential
+[credential "https://gist.github.com"]
+	helper = 
+	helper = !/opt/homebrew/bin/gh auth git-credential
+[filter "lfs"]
+	required = true
+	clean = git-lfs clean -- %f
+	smudge = git-lfs smudge -- %f
+	process = git-lfs filter-process

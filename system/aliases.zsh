@@ -8,3 +8,6 @@ then
   alias ll="gls -l --color"
   alias la='gls -A --color'
 fi
+
+# Cheatsheet
+alias cheat='bat ~/.dotfiles/CHEATSHEET.md --style=plain'

@@ -1,0 +1,17 @@
+#!/bin/bash
+# bin/sync-upstream - Rebase our customizations onto holman's latest
+set -e
+echo "Fetching holman/dotfiles..."
+git fetch holman
+echo "Current divergence from upstream:"
+git log --oneline holman/master..master | head -20
+echo ""
+echo "Upstream changes since last sync:"
+git log --oneline master..holman/master | head -20
+echo ""
+read -p "Rebase onto holman/master? (y/N) " -n 1 -r
+echo
+if [[ $REPLY =~ ^[Yy]$ ]]; then
+  git rebase holman/master
+  echo "Done. Run 'source ~/.zshrc' to reload."
+fi
