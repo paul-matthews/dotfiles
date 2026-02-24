@@ -66,6 +66,12 @@ defaults, and so on. Tweak this script, and occasionally run `dot` from
 time to time to keep your environment fresh and up-to-date. You can find
 this script in `bin/`.
 
+## manual steps after install
+
+After running `script/bootstrap` and `brew bundle`, these steps must be done manually:
+
+- **iTerm2 font**: Set font to "MesloLGS Nerd Font" in Settings → Profiles → Text (required for starship prompt icons)
+
 ## bugs
 
 I want this to work for everyone; that means when you clone it down it should

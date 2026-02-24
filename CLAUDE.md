@@ -17,7 +17,7 @@ Each top-level directory is a "topic" (git, vim, system, cosmic, etc.). The topi
 - `vim/vimrc.symlink` → `~/.vimrc` — vim-plug with tpope plugins, fzf.vim, CoC LSP
 - `system/tabcolor.zsh` — iTerm2 tab color system with per-PID rotation
 - `system/_path.zsh` — PATH setup (underscore prefix = loads first alphabetically)
-- `git/aliases.zsh` — shell aliases (gs, gl, gp, gac, etc.)
+- `git/aliases.zsh` — shell aliases (gs, gl, gpl, gp, gac, etc.)
 - `git/worktree.zsh` — worktree helpers (gwa, gwc, gwj, gwm, gwr, gwp)
 - `cosmic/aliases.zsh` — cosmic-clock project commands (cpush, cbuild, ctime, etc.)
 - `bin/cheat` — colored cheatsheet script (run `cheat` to view)
@@ -62,6 +62,10 @@ Claude CLI sessions use `~/.claude/session-tab-color.sh` (SessionStart hook) wit
 ## Stale/removed topics
 
 These were removed during the audit: `ruby/`, `sublime/`, `xcode/`. The `vendor/` directory has old pathogen submodules (vim-plug is used now).
+
+## New machine setup reminder
+
+When Paul mentions setting up a new machine or syncing dotfiles to another device, remind him to check the manual steps in README.md (e.g., setting iTerm2 font to MesloLGS Nerd Font).
 
 ## Testing changes
 
