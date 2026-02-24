@@ -3,21 +3,21 @@
 ## Navigation & Search                          │  Git Basics
                                                 │
 z <partial>         smart cd (zoxide)           │  gs              status -sb
-c <project>         cd ~/src/<project>          │  gl              pull --prune
-Ctrl-T              fzf file picker             │  gp              push origin HEAD
-Ctrl-R              fzf history search          │  gc              commit
-Alt-C               fzf cd                      │  gca             commit -a
-rg <pattern>        ripgrep search              │  gac "msg"       add all + commit
-fd <pattern>        fast find                   │  gco <branch>    checkout
-                                                │  gb              branch
-## Git Aliases (gitconfig)                      │  gcb             copy branch name
-                                                │  gd              diff (color)
-git up              pull --rebase --autostash   │  glog            pretty log graph
-git lg              log graph (all branches)    │  git amend       commit --amend
-git last            log -1 HEAD                 │  git unstage     reset HEAD --
-git cb <name>       checkout -b                 │  git count       shortlog -sn
-git co <branch>     checkout                    │  lazygit         full git TUI
-git pf              pull --ff-only              │
+c <project>         cd ~/src/<project>          │  gpl             pull --prune
+Ctrl-T              fzf file picker             │  gl              log (short)
+Ctrl-R              fzf history search          │  gp              push origin HEAD
+Alt-C               fzf cd                      │  gc              commit
+rg <pattern>        ripgrep search              │  gca             commit -a
+fd <pattern>        fast find                   │  gac "msg"       add all + commit
+                                                │  gco <branch>    checkout
+## Git Aliases (gitconfig)                      │  gb              branch
+                                                │  gcb             copy branch name
+git up              pull --rebase --autostash   │  gd              diff (color)
+git lg              log graph (all branches)    │  glog            pretty log graph
+git last            log -1 HEAD                 │  git amend       commit --amend
+git cb <name>       checkout -b                 │  git unstage     reset HEAD --
+git co <branch>     checkout                    │  git count       shortlog -sn
+git pf              pull --ff-only              │  lazygit         full git TUI
 
 ## Git Worktrees                                │  Worktree Flow
                                                 │

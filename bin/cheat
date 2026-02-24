@@ -33,14 +33,15 @@ ${S}━━━━━━━━━━━━━━━━━━━━━━━━━�
   ${S}────────────────────────────────────${R}            ${S}────────────────────────────────────${R}
   ${C}gs${R}              ${G}status -sb${R}                      ${C}gc${R}              ${G}commit${R}
   ${C}gd${R}              ${G}diff (color)${R}                    ${C}gca${R}             ${G}commit -a${R}
-  ${C}glog${R}            ${G}pretty log graph${R}                ${C}gac${R} ${Y}"msg"${R}       ${G}add all + commit${R}
-  ${C}git last${R}        ${G}log -1 HEAD${R}                     ${C}git amend${R}       ${G}commit --amend${R}
-  ${C}git lg${R}          ${G}log graph (all branches)${R}        ${C}git unstage${R}     ${G}reset HEAD --${R}
-  ${C}git count${R}       ${G}shortlog -sn${R}                    ${C}lazygit${R}         ${G}full git TUI${R}
+  ${C}gl${R}              ${G}log (short)${R}                     ${C}gac${R} ${Y}"msg"${R}       ${G}add all + commit${R}
+  ${C}glog${R}            ${G}pretty log graph${R}                ${C}git amend${R}       ${G}commit --amend${R}
+  ${C}git last${R}        ${G}log -1 HEAD${R}                     ${C}git unstage${R}     ${G}reset HEAD --${R}
+  ${C}git lg${R}          ${G}log graph (all branches)${R}        ${C}lazygit${R}         ${G}full git TUI${R}
+  ${C}git count${R}       ${G}shortlog -sn${R}                    ${R}
 
   ${H}Navigate & Sync${R}
   ${S}────────────────────────────────────${R}
-  ${C}gl${R}              ${G}pull --prune${R}                    ${C}gco${R} ${Y}<branch>${R}    ${G}checkout${R}
+  ${C}gpl${R}             ${G}pull --prune${R}                    ${C}gco${R} ${Y}<branch>${R}    ${G}checkout${R}
   ${C}gp${R}              ${G}push origin HEAD${R}                ${C}gb${R}              ${G}branch${R}
   ${C}git up${R}          ${G}pull --rebase --autostash${R}       ${C}git cb${R} ${Y}<name>${R}   ${G}checkout -b${R}
   ${C}git pf${R}          ${G}pull --ff-only${R}                  ${C}gcb${R}             ${G}copy branch name${R}

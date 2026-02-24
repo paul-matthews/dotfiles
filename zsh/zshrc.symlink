@@ -34,7 +34,7 @@ antigen bundle zsh-users/zsh-history-substring-search
 #==============================================================================
 
 # Load a theme
-antigen theme robbyrussell
+eval "$(starship init zsh)"
 
 #==============================================================================
 # Configuration
