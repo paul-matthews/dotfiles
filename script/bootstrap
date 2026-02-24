@@ -137,8 +137,23 @@ install_dotfiles () {
   done
 }
 
+install_configlinks () {
+  info 'installing configlinks'
+
+  local overwrite_all=false backup_all=false skip_all=false
+
+  mkdir -p "$HOME/.config"
+
+  for src in $(find -H "$DOTFILES_ROOT" -maxdepth 2 -name '*.configlink' -not -path '*.git*')
+  do
+    dst="$HOME/.config/$(basename "${src%.*}")"
+    link_file "$src" "$dst"
+  done
+}
+
 setup_gitconfig
 install_dotfiles
+install_configlinks
 
 # If we're on a Mac, let's install and setup homebrew.
 if [ "$(uname -s)" == "Darwin" ]

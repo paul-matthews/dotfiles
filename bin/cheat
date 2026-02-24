@@ -45,6 +45,8 @@ ${S}━━━━━━━━━━━━━━━━━━━━━━━━━�
   ${C}gp${R}              ${G}push origin HEAD${R}                ${C}gb${R}              ${G}branch${R}
   ${C}git up${R}          ${G}pull --rebase --autostash${R}       ${C}git cb${R} ${Y}<name>${R}   ${G}checkout -b${R}
   ${C}git pf${R}          ${G}pull --ff-only${R}                  ${C}gcb${R}             ${G}copy branch name${R}
+  ${C}gh pr create${R}    ${G}GitHub CLI: create PR${R}           ${C}ge${R}              ${G}edit new files in git${R}
+  ${C}gh pr view${R}      ${G}GitHub CLI: view PR${R}
 
 
 ${M}🌳 Git Worktrees${R}
@@ -99,12 +101,16 @@ ${S}━━━━━━━━━━━━━━━━━━━━━━━━━�
   ${S}────────────────────────────────────${R}
   ${C}bat${R} ${Y}<file>${R}              ${G}cat with syntax highlighting + line numbers${R}
   ${C}bat -l json${R} ${Y}<file>${R}      ${G}pretty-print JSON${R}
+  ${C}glow${R} ${Y}<file.md>${R}          ${G}render markdown in terminal${R}
   ${C}delta${R}                   ${G}better git diffs (automatic via gitconfig)${R}
 
 
 ${M}🐚 Shell${R}
 ${S}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${R}
 
+  ${C}l${R}                       ${G}ls -lAh (all files, human sizes)${R}
+  ${C}ll${R}                      ${G}ls -l${R}
+  ${C}la${R}                      ${G}ls -A (hidden files)${R}
   ${C}d${R}                       ${G}dirs -v (directory stack)${R}
   ${C}pu${R} / ${C}po${R}                 ${G}pushd / popd${R}
   ${C}cls${R}                     ${G}clear${R}
@@ -120,6 +126,15 @@ ${S}━━━━━━━━━━━━━━━━━━━━━━━━━�
   ${C}cbp upload${R}              ${G}build + push in one step${R}
   ${C}clogs${R}                   ${G}cosmic-logs${R}
   ${C}ctime${R}                   ${G}cosmic-logs -l timeline${R}
+
+
+${M}🍓 RPi 5${R}
+${S}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${R}
+
+  ${C}rpi${R}                     ${G}ssh rpi5${R}
+  ${C}rpi-find${R}                ${G}nmap scan for RPi devices on LAN${R}
+  ${C}rpi-sync${R} ${Y}<src> <dst>${R}   ${G}rsync -avz (excludes .git)${R}
+  ${C}mpremote${R}                ${G}MicroPython device management${R}
 
 
 ${M}⌨️  Keyboard${R} ${D}(zsh vi mode)${R}

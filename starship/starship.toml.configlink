@@ -1,0 +1,34 @@
+# Starship Configuration
+
+# Get editor completions based on the config schema
+"$schema" = 'https://starship.rs/config-schema.json'
+
+# Use custom symbols for modules
+[git_branch]
+symbol = " "
+
+[git_status]
+ahead = "⇡"
+behind = "⇣"
+diverged = "⇕"
+renamed = "»"
+deleted = "✘"
+
+[python]
+symbol = "🐍 "
+pyenv_prefix = "venv "
+
+[nodejs]
+symbol = " "
+
+[package]
+disabled = true
+
+[aws]
+symbol = " "
+
+[docker_context]
+symbol = " "
+
+[memory_usage]
+symbol = " "
