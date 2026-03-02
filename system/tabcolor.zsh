@@ -32,35 +32,99 @@ clear_badge() {
   fi
 }
 
-# Color palettes per project — each tab gets a different shade
-# keyed by TABCOLOR_PRESET, rotated by shell PID
-typeset -A _TABCOLOR_PALETTES
-_TABCOLOR_PALETTES=(
-  cosmic  "100,100,220 130,80,200 80,120,210 160,90,180 70,140,220 110,70,190 90,160,200 140,100,210"
-  claude  "217,119,87 200,100,120 230,140,70 190,110,100 240,130,90 210,90,130 220,150,80 200,120,110"
-  dotfiles "80,180,80 60,160,120 100,190,60 70,170,100 90,200,80 50,180,140 110,170,70 80,190,110"
-  android "61,220,132 80,200,150 50,210,170 90,190,130 70,220,160 60,200,140 100,210,120 80,220,145"
-)
+# Source shared palette data (POSIX sh, used by both zsh and Claude's bash hook)
+source "${0:h}/tabcolor-palettes.sh"
+
+# Map preset name to display name
+_tabcolor_display_name() {
+  case "$1" in
+    cosmic)    echo "Cosmic Clock" ;;
+    dotfiles)  echo "Dotfiles" ;;
+    android)   echo "Android" ;;
+    docker)    echo "Docker" ;;
+    spectra)   echo "Spectra" ;;
+    sandbox)   echo "Sandbox" ;;
+    picotools) echo "Pico Tools" ;;
+    herd)      echo "Herd" ;;
+  esac
+}
+
+# Map preset name to badge text
+_tabcolor_badge() {
+  case "$1" in
+    cosmic)    echo "PICO" ;;
+    dotfiles)  echo "SYS" ;;
+    android)   echo "ANDROID" ;;
+    docker)    echo "DOCKER" ;;
+    spectra)   echo "SPECTRA" ;;
+    sandbox)   echo "SANDBOX" ;;
+    picotools) echo "PICOTOOLS" ;;
+    herd)      echo "HERD" ;;
+  esac
+}
 
 # Named presets — the friendly command
 tabcolor() {
   case "$1" in
-    cosmic|claude|dotfiles|android)
-      local palette=(${(s: :)_TABCOLOR_PALETTES[$1]})
-      local idx=$(( $$ % ${#palette[@]} + 1 ))
-      local rgb=(${(s:,:)palette[$idx]})
+    cosmic|dotfiles|android|docker|spectra|sandbox|picotools|herd)
+      # Read palette lines into zsh array
+      local lines=()
+      while IFS= read -r line; do
+        lines+=("$line")
+      done < <(_tabcolor_get_palette "$1")
+
+      local idx=$(( $$ % ${#lines[@]} + 1 ))
+      local rgb=(${=lines[$idx]})
       set_tab_color ${rgb[1]} ${rgb[2]} ${rgb[3]}
-      case "$1" in
-        cosmic)   set_tab_title "Cosmic Clock" ; set_badge "PICO"    ;;
-        claude)   set_tab_title "Claude: $(basename $PWD)" ; set_badge "CLAUDE" ;;
-        dotfiles) set_tab_title "Dotfiles"     ; set_badge "SYS"     ;;
-        android)  set_tab_title "Android"      ; set_badge "ANDROID" ;;
-      esac
+
+      local emoji=$(_tabcolor_get_emoji "$1")
+      local name=$(_tabcolor_display_name "$1")
+      set_tab_title "$emoji $name"
+      set_badge "$(_tabcolor_badge "$1")"
       ;;
     danger)    set_tab_color 255 50  50   ; set_tab_title "⚠ PRODUCTION"   ; set_badge "PROD"   ;;
     reset|"")  reset_tab_color            ; set_tab_title "$(basename $PWD)"; clear_badge        ;;
-    *)         echo "Unknown preset: $1. Available: claude, cosmic, dotfiles, android, danger, reset" ;;
+    *)         echo "Unknown preset: $1. Available: cosmic, dotfiles, android, docker, spectra, sandbox, picotools, herd, danger, reset" ;;
   esac
+}
+
+# Preview work vs Claude (75% darkened) colors for a preset
+tabcolor-preview() {
+  local preset="$1"
+  if [[ -z "$preset" ]]; then
+    echo "Usage: tabcolor-preview <preset>"
+    echo "Presets: cosmic dotfiles android docker spectra sandbox picotools herd"
+    return 1
+  fi
+
+  local emoji=$(_tabcolor_get_emoji "$preset")
+  local name=$(_tabcolor_display_name "$preset")
+  if [[ -z "$name" ]]; then
+    echo "Unknown preset: $preset"
+    return 1
+  fi
+
+  echo ""
+  echo "  $emoji $name — work tab vs 🤖 Claude tab"
+  echo "  ─────────────────────────────────────────"
+  echo ""
+
+  local i=0
+  while IFS= read -r line; do
+    local rgb=(${=line})
+    local r=${rgb[1]} g=${rgb[2]} b=${rgb[3]}
+
+    # Darken by 75% for Claude tab (floor at 40)
+    local dr=$(( r * 3 / 4 )); [[ $dr -lt 40 ]] && dr=40
+    local dg=$(( g * 3 / 4 )); [[ $dg -lt 40 ]] && dg=40
+    local db=$(( b * 3 / 4 )); [[ $db -lt 40 ]] && db=40
+
+    printf "  \033[48;2;%d;%d;%dm    \033[0m %3d %3d %3d  work" "$r" "$g" "$b" "$r" "$g" "$b"
+    printf "     \033[48;2;%d;%d;%dm    \033[0m %3d %3d %3d  claude\n" "$dr" "$dg" "$db" "$dr" "$dg" "$db"
+    i=$(( i + 1 ))
+  done < <(_tabcolor_get_palette "$preset")
+
+  echo ""
 }
 
 # Auto-apply tab color from TABCOLOR_PRESET env var (set by direnv),

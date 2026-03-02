@@ -75,17 +75,35 @@ ${S}━━━━━━━━━━━━━━━━━━━━━━━━━�
 ${M}🤖 Claude CLI${R}
 ${S}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${R}
 
-  ${D}Each Claude session auto-gets a unique tab color from a rotating palette.${R}
-  ${D}Tab title shows: Claude: <project> [branch]${R}
+  ${D}Each project gets a unique color palette (8 shades, rotated per tab).${R}
+  ${D}Work tabs: emoji + project name. Claude tabs: 🤖 + project (darkened 75%).${R}
+  ${D}Set ${C}TABCOLOR_PRESET${D} in .envrc — direnv auto-applies on cd.${R}
 
   ${H}Tab Colors${R} ${D}(iTerm2 — auto-rotates shade per tab)${R}
   ${S}────────────────────────────────────${R}
-  ${C}tabcolor claude${R}         ${G}orange shades + CLAUDE badge${R}
-  ${C}tabcolor cosmic${R}         ${G}purple/blue shades + PICO badge${R}
-  ${C}tabcolor dotfiles${R}       ${G}green shades + SYS badge${R}
-  ${C}tabcolor android${R}        ${G}teal shades + ANDROID badge${R}
+  ${C}tabcolor docker${R}         ${G}🐳 steel blues${R}
+  ${C}tabcolor spectra${R}        ${G}🌈 magentas/pinks${R}
+  ${C}tabcolor sandbox${R}        ${G}🧪 golden yellows${R}
+  ${C}tabcolor picotools${R}      ${G}🔧 cyans/turquoise${R}
+  ${C}tabcolor herd${R}           ${G}🐑 warm amber/copper${R}
+  ${C}tabcolor cosmic${R}         ${G}🪐 purples/blues${R}
+  ${C}tabcolor dotfiles${R}       ${G}📂 greens${R}
+  ${C}tabcolor android${R}        ${G}📱 teals${R}
   ${C}tabcolor danger${R}         ${G}red + PROD badge${R}
   ${C}tabcolor reset${R}          ${G}back to default${R}
+  ${C}tabcolor-preview${R} ${Y}<preset>${R}  ${G}show work vs Claude colors side by side${R}
+
+
+${M}👁  Watching${R}
+${S}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${R}
+
+  ${D}viddy — modern watch with color, diff highlighting, and time machine mode.${R}
+
+  ${C}watch${R} ${Y}<cmd>${R}              ${G}alias for viddy (color preserved by default)${R}
+  ${C}vd${R} ${Y}<cmd>${R}                ${G}watch with diff highlighting between runs${R}
+  ${C}vdn${R} ${Y}<cmd>${R}               ${G}watch + diff + bell on change${R}
+  ${C}vd${R} ${Y}'git -c color.ui=always lg'${R}          ${G}example: watch git log with color${R}
+  ${C}vdn${R} ${Y}'git -c color.ui=always status -sb'${R} ${G}example: bell when status changes${R}
 
 
 ${M}🔧 Dotfiles & Tools${R}
