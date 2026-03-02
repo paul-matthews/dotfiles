@@ -129,12 +129,36 @@ tabcolor-preview() {
   echo ""
 }
 
-# Auto-apply tab color from TABCOLOR_PRESET env var was disabled in favor
-# of iTerm2 Automatic Profile Switching (Dynamic Profiles).
-# The manual `tabcolor <preset>` command remains available.
+# Auto-apply tab color from TABCOLOR_PRESET env var (set by direnv),
+# or reset when leaving a direnv-managed directory.
+# Tracks last-applied preset to avoid redundant escape codes on every prompt.
 #
-# _TABCOLOR_LAST=""
-# _tabcolor_hook() { ... }
-# autoload -Uz add-zsh-hook
-# add-zsh-hook precmd _tabcolor_hook
+# On machines with no per-repo .envrc this is a no-op, and iTerm2 Automatic
+# Profile Switching (iterm/DynamicProfiles/projects.json) can colour tabs
+# by path instead. Where both apply, the escape codes emitted here win.
+_TABCOLOR_LAST=""
 
+_tabcolor_hook() {
+  local want="${TABCOLOR_PRESET:-}"
+  [[ -z "$DIRENV_DIR" ]] && want=""
+
+  if [[ "$want" != "$_TABCOLOR_LAST" ]]; then
+    # Preset changed — apply full color + title + badge
+    if [[ -n "$want" ]]; then
+      tabcolor "$want"
+    else
+      reset_tab_color
+      clear_badge
+      set_tab_title "$(basename $PWD)"
+    fi
+    _TABCOLOR_LAST="$want"
+  elif [[ -n "$want" ]]; then
+    # Preset unchanged — re-apply title (other hooks may overwrite it)
+    set_tab_title "$(_tabcolor_get_emoji "$want") $(_tabcolor_display_name "$want")"
+  fi
+}
+
+# precmd fires after every command (including after direnv updates env).
+# chpwd alone isn't enough because direnv's hook runs after chpwd.
+autoload -Uz add-zsh-hook
+add-zsh-hook precmd _tabcolor_hook
