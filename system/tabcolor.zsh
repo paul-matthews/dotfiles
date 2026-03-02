@@ -46,6 +46,7 @@ _tabcolor_display_name() {
     sandbox)   echo "Sandbox" ;;
     picotools) echo "Pico Tools" ;;
     herd)      echo "Herd" ;;
+    planner)   echo "Planner Tools" ;;
   esac
 }
 
@@ -60,13 +61,14 @@ _tabcolor_badge() {
     sandbox)   echo "SANDBOX" ;;
     picotools) echo "PICOTOOLS" ;;
     herd)      echo "HERD" ;;
+    planner)   echo "PLANNER" ;;
   esac
 }
 
 # Named presets — the friendly command
 tabcolor() {
   case "$1" in
-    cosmic|dotfiles|android|docker|spectra|sandbox|picotools|herd)
+    cosmic|dotfiles|android|docker|spectra|sandbox|picotools|herd|planner)
       # Read palette lines into zsh array
       local lines=()
       while IFS= read -r line; do
@@ -84,7 +86,7 @@ tabcolor() {
       ;;
     danger)    set_tab_color 255 50  50   ; set_tab_title "⚠ PRODUCTION"   ; set_badge "PROD"   ;;
     reset|"")  reset_tab_color            ; set_tab_title "$(basename $PWD)"; clear_badge        ;;
-    *)         echo "Unknown preset: $1. Available: cosmic, dotfiles, android, docker, spectra, sandbox, picotools, herd, danger, reset" ;;
+    *)         echo "Unknown preset: $1. Available: cosmic, dotfiles, android, docker, spectra, sandbox, picotools, herd, planner, danger, reset" ;;
   esac
 }
 
@@ -93,7 +95,7 @@ tabcolor-preview() {
   local preset="$1"
   if [[ -z "$preset" ]]; then
     echo "Usage: tabcolor-preview <preset>"
-    echo "Presets: cosmic dotfiles android docker spectra sandbox picotools herd"
+    echo "Presets: cosmic dotfiles android docker spectra sandbox picotools herd planner"
     return 1
   fi
 

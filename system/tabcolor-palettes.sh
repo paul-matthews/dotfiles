@@ -85,6 +85,16 @@ _tabcolor_get_palette() {
       echo "215 165 65"
       echo "185 135 95"
       ;;
+    planner)
+      echo "180 110 120"
+      echo "190 120 110"
+      echo "170 100 130"
+      echo "200 130 100"
+      echo "185 115 125"
+      echo "175 105 135"
+      echo "195 125 105"
+      echo "180 115 115"
+      ;;
   esac
 }
 
@@ -99,5 +109,6 @@ _tabcolor_get_emoji() {
     sandbox)   echo "🧪" ;;
     picotools) echo "🔧" ;;
     herd)      echo "🐑" ;;
+    planner)   echo "📆" ;;
   esac
 }

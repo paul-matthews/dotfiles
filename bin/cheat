@@ -86,6 +86,7 @@ ${S}━━━━━━━━━━━━━━━━━━━━━━━━━�
   ${C}tabcolor sandbox${R}        ${G}🧪 golden yellows${R}
   ${C}tabcolor picotools${R}      ${G}🔧 cyans/turquoise${R}
   ${C}tabcolor herd${R}           ${G}🐑 warm amber/copper${R}
+  ${C}tabcolor planner${R}        ${G}📆 dusty coral/salmon${R}
   ${C}tabcolor cosmic${R}         ${G}🪐 purples/blues${R}
   ${C}tabcolor dotfiles${R}       ${G}📂 greens${R}
   ${C}tabcolor android${R}        ${G}📱 teals${R}
