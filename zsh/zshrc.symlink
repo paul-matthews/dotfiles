@@ -171,24 +171,14 @@ if (( $+commands[direnv] )); then
   eval "$(direnv hook zsh)"
 fi
 
-# Secret Management (SOPS)
-# If sops is installed and we have a secrets file, decrypt it to ~/.localrc.secrets
-if (( $+commands[sops] )) && [[ -f "$ZSH/secrets.sops.yaml" ]]; then
-  if [[ ! -f ~/.localrc.secrets ]] || [[ "$ZSH/secrets.sops.yaml" -nt ~/.localrc.secrets ]]; then
-    # We assume age key is already set up in SOPS_AGE_KEY_FILE
-    sops -d "$ZSH/secrets.sops.yaml" > ~/.localrc.secrets 2>/dev/null
-  fi
-  [[ -f ~/.localrc.secrets ]] && source ~/.localrc.secrets
-fi
-
 #==============================================================================
-# Local Configuration
+# Local Configuration & Secrets
 #==============================================================================
 
-if [[ -a ~/.localrc ]]
-then
-  source ~/.localrc
-fi
+# Stash your environment variables in ~/.localrc.secrets or ~/.localrc.
+# These files are gitignored and used for local-only or sensitive config.
+[[ -f ~/.localrc.secrets ]] && source ~/.localrc.secrets
+[[ -f ~/.localrc ]] && source ~/.localrc
 
 # NVM (installed via Homebrew)
 export NVM_DIR="$HOME/.nvm"

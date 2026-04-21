@@ -2,4 +2,4 @@ creation_rules:
   - path_regex: .*\.sops\.yaml$
     # You can set SOPS_AGE_RECIPIENTS in your environment
     # or list them here explicitly.
-    age: "${SOPS_AGE_RECIPIENTS}"
+    age: "age1huzhkqpnun7ch5npze3x5wlz3z8ht3q0y77ut6c8mnnt98pq7eystfghnp"

@@ -1,5 +1,27 @@
 # Dotfiles Cheatsheet
 
+## 🤫 Secrets (SOPS)
+Securely manage sensitive aliases and environment variables for GitHub.
+
+### 1. Workflow
+- **Local Edit:** Edit `~/.localrc.secrets` in plain text (gitignored).
+- **Push to Git:** `secrets-push` (encrypts local file to the repo).
+- **Pull to Local:** `secrets-pull` (decrypts repo file to your machine).
+
+### 2. Setup (One-time)
+1. **Generate key:** `age-keygen -o ~/.age/key.txt`
+2. **Configure:** Add public key to `.sops.yaml` in the `age:` field.
+3. **Env:** Add `export SOPS_AGE_KEY_FILE=~/.age/key.txt` to `~/.localrc`.
+
+---
+
+## 🎨 Terminal Rendering
+If you see unknown characters in `ls` or your prompt:
+- **Reason:** `eza` and `starship` require a **Nerd Font**.
+- **Fix:** Install a font from [nerdfonts.com](https://www.nerdfonts.com/) (e.g., JetBrainsMono) and set it in your Terminal/iTerm2 settings.
+
+---
+
 ## Navigation & Search                          │  Git Basics
                                                 │
 z <partial>         smart cd (zoxide)           │  gs              status -sb
