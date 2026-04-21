@@ -169,6 +169,39 @@ setup_secrets () {
   fi
 }
 
+install_linux_packages () {
+  if [ "$(uname -s)" == "Linux" ]
+  then
+    info "installing linux dependencies"
+
+    # Check for apt
+    if command -v apt-get >/dev/null 2>&1
+    then
+      sudo apt-get update -qq
+      sudo apt-get install -y zsh tmux curl ripgrep fd-find fzf direnv >/dev/null
+
+      # bat is often 'batcat' on debian
+      sudo apt-get install -y bat >/dev/null || info "bat install failed"
+
+      # zoxide and eza
+      sudo apt-get install -y zoxide eza >/dev/null || info "zoxide/eza not found in default repos"
+
+      # starship usually needs its own installer for latest
+      if ! command -v starship >/dev/null 2>&1
+      then
+        curl -sS https://starship.rs/install.sh | sh -s -- -y >/dev/null
+      fi
+
+      # sops and age
+      sudo apt-get install -y sops age >/dev/null || info "sops/age not found in default repos"
+
+      success "linux dependencies installed"
+    else
+      fail "apt-get not found. This bootstrap only supports Debian-based Linux."
+    fi
+  fi
+}
+
 setup_gitconfig
 setup_secrets
 install_dotfiles
@@ -184,6 +217,12 @@ then
   else
     fail "error installing dependencies"
   fi
+fi
+
+# If we're on Linux, install apt packages.
+if [ "$(uname -s)" == "Linux" ]
+then
+  install_linux_packages
 fi
 
 echo ''
