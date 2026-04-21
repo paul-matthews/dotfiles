@@ -151,7 +151,26 @@ install_configlinks () {
   done
 }
 
+setup_secrets () {
+  if [ -f secrets.sops.yaml ]
+  then
+    info 'setup secrets'
+    if command -v sops >/dev/null 2>&1
+    then
+      if sops -d secrets.sops.yaml > "$HOME/.localrc.secrets" 2>/dev/null
+      then
+        success 'secrets decrypted to ~/.localrc.secrets'
+      else
+        info 'sops decryption failed (check keys)'
+      fi
+    else
+      info 'sops not installed, skipping secret decryption'
+    fi
+  fi
+}
+
 setup_gitconfig
+setup_secrets
 install_dotfiles
 install_configlinks
 

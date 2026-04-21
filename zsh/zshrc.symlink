@@ -171,6 +171,16 @@ if (( $+commands[direnv] )); then
   eval "$(direnv hook zsh)"
 fi
 
+# Secret Management (SOPS)
+# If sops is installed and we have a secrets file, decrypt it to ~/.localrc.secrets
+if (( $+commands[sops] )) && [[ -f "$ZSH/secrets.sops.yaml" ]]; then
+  if [[ ! -f ~/.localrc.secrets ]] || [[ "$ZSH/secrets.sops.yaml" -nt ~/.localrc.secrets ]]; then
+    # We assume age key is already set up in SOPS_AGE_KEY_FILE
+    sops -d "$ZSH/secrets.sops.yaml" > ~/.localrc.secrets 2>/dev/null
+  fi
+  [[ -f ~/.localrc.secrets ]] && source ~/.localrc.secrets
+fi
+
 #==============================================================================
 # Local Configuration
 #==============================================================================
