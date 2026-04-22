@@ -4,9 +4,9 @@
 Securely manage sensitive aliases and environment variables for GitHub.
 
 ### 1. Workflow
+- **Pull to Local (Decrypt):** `secrets-pull` (decrypts repo `secrets.sops.yaml` to `~/.localrc.secrets`).
 - **Local Edit:** Edit `~/.localrc.secrets` in plain text (gitignored).
-- **Push to Git:** `secrets-push` (encrypts local file to the repo).
-- **Pull to Local:** `secrets-pull` (decrypts repo file to your machine).
+- **Push to Git (Encrypt):** `secrets-push` (encrypts local `~/.localrc.secrets` back to the repo).
 
 ### 2. Setup (One-time)
 1. **Generate key:** `age-keygen -o ~/.age/key.txt`
