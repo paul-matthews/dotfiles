@@ -157,7 +157,7 @@ setup_secrets () {
     info 'setup secrets'
     if command -v sops >/dev/null 2>&1
     then
-      if sops -d secrets.sops.yaml > "$HOME/.localrc.secrets" 2>/dev/null
+      if sops -d --output-type binary secrets.sops.yaml > "$HOME/.localrc.secrets" 2>/dev/null
       then
         success 'secrets decrypted to ~/.localrc.secrets'
       else

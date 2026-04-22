@@ -27,4 +27,4 @@ alias cheat='$ZSH/bin/cheat | less -R'
 # Secret Management (SOPS)
 # Manual push/pull for GitHub encryption
 alias secrets-push='sops -e ~/.localrc.secrets > $ZSH/secrets.sops.yaml'
-alias secrets-pull='sops -d $ZSH/secrets.sops.yaml > ~/.localrc.secrets'
+alias secrets-pull='sops -d --output-type binary $ZSH/secrets.sops.yaml > ~/.localrc.secrets'
