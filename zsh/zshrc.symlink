@@ -105,10 +105,17 @@ setopt NO_BEEP                  # silence
 export EDITOR='vim'
 bindkey -v
 
+# Vim Mode: Edit command in a real Vim buffer
+# Hit 'v' while in Zsh Normal Mode (after hitting ESC)
+autoload -Uz edit-command-line
+zle -N edit-command-line
+bindkey -M vicmd 'v' edit-command-line
+
 #==============================================================================
 # Aliases
 #==============================================================================
 
+alias g='gemini'
 alias reload!='. ~/.zshrc'
 alias cls='clear'
 alias mv='nocorrect mv'
