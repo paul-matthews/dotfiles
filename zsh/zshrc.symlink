@@ -1,39 +1,61 @@
 #==============================================================================
-# Zsh Configuration - Refactored by Gemini
-#
-# This configuration uses Antigen, a plugin manager for Zsh, to simplify
-# the management of plugins, themes, and completions.
+# Zsh Configuration
 #==============================================================================
+
+# shortcut to this dotfiles path is $ZSH
+export ZSH=$HOME/.dotfiles
+
+# your project folder that we can `c [tab]` to
+export PROJECTS=~/Code
 
 #==============================================================================
 # Antigen (Plugin Manager)
 #==============================================================================
 
+# Disable auto-compilation to prevent ZWC write errors
+export ANTIGEN_AUTO_CONFIG=false
+
 # Load Antigen
-source ~/.dotfiles/zsh/antigen.zsh
+source $ZSH/zsh/antigen.zsh
 
 # Load the oh-my-zsh library
-antigen use oh-my-zsh
+antigen use oh-my-zsh > /dev/null
 
 #==============================================================================
 # Plugins
 #==============================================================================
 
 # Syntax highlighting
-antigen bundle zsh-users/zsh-syntax-highlighting
+antigen bundle zsh-users/zsh-syntax-highlighting > /dev/null
 
 # Auto-suggestions
-antigen bundle zsh-users/zsh-autosuggestions
+antigen bundle zsh-users/zsh-autosuggestions > /dev/null
 
 # History search
-antigen bundle zsh-users/zsh-history-substring-search
+antigen bundle zsh-users/zsh-history-substring-search > /dev/null
+
+# Fuzzy finder
+antigen bundle fzf > /dev/null
 
 #==============================================================================
-# Theme
+# Dotfiles Loading logic
 #==============================================================================
 
-# Load a theme
-antigen theme robbyrussell
+# all of our zsh files
+typeset -U config_files
+config_files=($ZSH/**/*.zsh)
+
+# load the path files
+for file in ${(M)config_files:#*/path.zsh}
+do
+  source $file
+done
+
+# load everything but the path and completion files
+for file in ${${config_files:#*/path.zsh}:#*/completion.zsh}
+do
+  source $file
+done
 
 #==============================================================================
 # Configuration
@@ -66,10 +88,6 @@ alias po=popd
 alias d='dirs -v'
 alias h=history
 alias grep=egrep
-alias ll='ls -l'
-alias la='ls -a'
-alias lsd='ls -ld *(-/DN)'
-alias lsa='ls -ld .*'
 alias gvimdiff="mvimdiff"
 alias vim="vim -p"
 alias -g M='| more'
@@ -77,42 +95,59 @@ alias -g H='| head'
 alias -g T='| tail'
 alias -g L='| less'
 alias -g G="| grep"
-alias cpv="rsync -poghb --backup-dir=/tmp/rsync -e /dev/null --progress --"
 
-#==============================================================================
-# Functions
-#==============================================================================
+# Modern replacements for ls
+if (( $+commands[eza] ))
+then
+  alias ls="eza --icons --group-directories-first"
+  alias l="eza -lAh --icons --group-directories-first"
+  alias ll="eza -l --icons --group-directories-first"
+  alias la='eza -a --icons --group-directories-first'
+fi
 
-# Change directory to a project folder
-c() {
-  cd "$PROJECTS/$1"
-}
-
-# Define completion for the 'c' function
-_c_complete() {
-  # Get a list of directories inside the PROJECTS folder
-  local projects
-  projects=(${(f)"$(ls -d $PROJECTS/*/)"})
-  # Reply with the directory names, without the trailing slash
-  reply=(${projects[@]:t:r})
-}
-
-# Register the completion function for the 'c' command
-compctl -K _c_complete c
+# VIM Keybindings
+bindkey -v
 
 #==============================================================================
 # Apply Antigen Configuration
 #==============================================================================
 
-antigen apply
+# initialize autocomplete here, otherwise functions won't be loaded
+autoload -U compinit
+compinit
+
+antigen apply > /dev/null
+
+# load every completion after autocomplete loads
+for file in ${(M)config_files:#*/completion.zsh}
+do
+  source $file
+done
+
+unset config_files
+
+#==============================================================================
+# Prompt Configuration (Starship)
+#==============================================================================
+
+if (( $+commands[starship] ))
+then
+  eval "$(starship init zsh)"
+fi
+
+#==============================================================================
+# Zoxide (Modern z command)
+#==============================================================================
+
+if (( $+commands[zoxide] ))
+then
+  eval "$(zoxide init zsh)"
+fi
 
 #==============================================================================
 # Local Configuration
-#================================E==============================================
+#==============================================================================
 
-# Stash your environment variables in ~/.localrc. This means they'll stay out
-# of your main dotfiles repository (which may be public, like this one), but
-# you'll have access to them in your scripts.
 if [[ -a ~/.localrc ]]
 then
   source ~/.localrc
