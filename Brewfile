@@ -43,6 +43,10 @@ brew 'mpremote'
 
 # Network & utilities
 brew 'cloudflared'
+brew 'eza'
+brew 'fzf'
+brew 'starship'
+brew 'zoxide'
 brew 'imagemagick'
 brew 'nmap'
 brew 'yt-dlp'

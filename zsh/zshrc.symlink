@@ -1,40 +1,84 @@
 #==============================================================================
-# Zsh Configuration - Refactored by Gemini
-#
-# This configuration uses Antigen, a plugin manager for Zsh, to simplify
-# the management of plugins, themes, and completions.
+# Zsh Configuration
 #==============================================================================
+
+# shortcut to this dotfiles path is $ZSH
+export ZSH=$HOME/.dotfiles
+
+# your project folder that we can `c [tab]` to
+export PROJECTS=~/Code
 
 #==============================================================================
 # Antigen (Plugin Manager)
 #==============================================================================
 
+# Disable auto-compilation to prevent ZWC write errors
+export ANTIGEN_AUTO_CONFIG=false
+
 # Load Antigen (only once — re-sourcing causes prompt issues)
 if [[ -z "$_ANTIGEN_LOADED" ]]; then
-  source ~/.dotfiles/zsh/antigen.zsh
+  source $ZSH/zsh/antigen.zsh
 
   # Load the oh-my-zsh library
-  antigen use oh-my-zsh
+  antigen use oh-my-zsh > /dev/null
+
+  #==============================================================================
+  # Plugins
+  #==============================================================================
+
+  # Syntax highlighting
+  antigen bundle zsh-users/zsh-syntax-highlighting > /dev/null
+
+  # Auto-suggestions
+  antigen bundle zsh-users/zsh-autosuggestions > /dev/null
+
+  # History search
+  antigen bundle zsh-users/zsh-history-substring-search > /dev/null
+
+  # Fuzzy finder
+  antigen bundle fzf > /dev/null
+
+  #==============================================================================
+  # Apply Antigen Configuration
+  #==============================================================================
+
+  # initialize autocomplete here, otherwise functions won't be loaded
+  autoload -U compinit
+  compinit
+
+  antigen apply > /dev/null
+  _ANTIGEN_LOADED=1
+fi
 
 #==============================================================================
-# Plugins
+# Dotfiles Topic Loader
 #==============================================================================
 
-# Syntax highlighting
-antigen bundle zsh-users/zsh-syntax-highlighting
+# all of our zsh files
+typeset -U config_files
+config_files=($ZSH/**/*.zsh)
 
-# Auto-suggestions
-antigen bundle zsh-users/zsh-autosuggestions
+# load the path files
+for file in ${(M)config_files:#*/path.zsh}
+do
+  source $file
+done
 
-# History search
-antigen bundle zsh-users/zsh-history-substring-search
+# load everything but the path and completion files
+for file in ${${config_files:#*/path.zsh}:#*/completion.zsh}
+do
+  [[ "$file" == */zshrc.symlink ]] && continue
+  [[ "$file" == */antigen.zsh ]] && continue
+  source $file
+done
 
-#==============================================================================
-# Theme
-#==============================================================================
+# load every completion after everything else loads
+for file in ${(M)config_files:#*/completion.zsh}
+do
+  source $file
+done
 
-# Load a theme
-eval "$(starship init zsh)"
+unset config_files
 
 #==============================================================================
 # Configuration
@@ -75,9 +119,6 @@ alias po=popd
 alias d='dirs -v'
 alias h=history
 alias grep=egrep
-# ll and la defined in system/aliases.zsh (gls versions with color)
-alias lsd='ls -ld *(-/DN)'
-alias lsa='ls -ld .*'
 alias gvimdiff="mvimdiff"
 alias vim="vim -p"
 alias -g M='| more'
@@ -85,73 +126,24 @@ alias -g H='| head'
 alias -g T='| tail'
 alias -g L='| less'
 alias -g G="| grep"
-alias cpv="rsync -poghb --backup-dir=/tmp/rsync -e /dev/null --progress --"
 
-#==============================================================================
-# Functions
-#==============================================================================
-
-# Change directory to a project folder
-c() {
-  cd "$PROJECTS/$1"
-}
-
-# Define completion for the 'c' function
-_c_complete() {
-  # Get a list of directories inside the PROJECTS folder
-  local projects
-  projects=(${(f)"$(ls -d $PROJECTS/*/)"})
-  # Reply with the directory names, without the trailing slash
-  reply=(${projects[@]:t:r})
-}
-
-# Register the completion function for the 'c' command
-compctl -K _c_complete c
-
-#==============================================================================
-# Apply Antigen Configuration
-#==============================================================================
-
-  antigen apply
-  _ANTIGEN_LOADED=1
-fi
-
-#==============================================================================
-# Dotfiles Topic Loader
-#==============================================================================
-
-# Set $ZSH to the dotfiles root (used by topic files and bin scripts)
-export ZSH="$HOME/.dotfiles"
-
-# Load path files first (*/path.zsh), then everything else (*.zsh),
-# skipping completion.zsh files (handled by Antigen).
-for file in $ZSH/*/path.zsh(N); do
-  source "$file"
-done
-
-for file in $ZSH/**/*.zsh(N); do
-  [[ "$file" == */path.zsh ]] && continue
-  [[ "$file" == */completion.zsh ]] && continue
-  [[ "$file" == */zshrc.symlink ]] && continue
-  [[ "$file" == */antigen.zsh ]] && continue
-  source "$file"
-done
-
-#==============================================================================
-# Local Configuration
-#================================E==============================================
-
-# Stash your environment variables in ~/.localrc. This means they'll stay out
-# of your main dotfiles repository (which may be public, like this one), but
-# you'll have access to them in your scripts.
-if [[ -a ~/.localrc ]]
+# Modern replacements for ls
+if (( $+commands[eza] ))
 then
-  source ~/.localrc
+  alias ls="eza --icons --group-directories-first"
+  alias l="eza -lAh --icons --group-directories-first"
+  alias ll="eza -l --icons --group-directories-first"
+  alias la='eza -a --icons --group-directories-first'
 fi
 
-export NVM_DIR="$HOME/.nvm"
-[ -s "/opt/homebrew/opt/nvm/nvm.sh" ] && \. "/opt/homebrew/opt/nvm/nvm.sh"
-[ -s "/opt/homebrew/opt/nvm/etc/bash_completion.d/nvm" ] && \. "/opt/homebrew/opt/nvm/etc/bash_completion.d/nvm"
+#==============================================================================
+# Prompt Configuration (Starship)
+#==============================================================================
+
+if (( $+commands[starship] ))
+then
+  eval "$(starship init zsh)"
+fi
 
 #==============================================================================
 # Tool Integrations (fzf, zoxide, direnv)
@@ -172,3 +164,16 @@ if (( $+commands[direnv] )); then
   eval "$(direnv hook zsh)"
 fi
 
+#==============================================================================
+# Local Configuration
+#==============================================================================
+
+if [[ -a ~/.localrc ]]
+then
+  source ~/.localrc
+fi
+
+# NVM (installed via Homebrew)
+export NVM_DIR="$HOME/.nvm"
+[ -s "/opt/homebrew/opt/nvm/nvm.sh" ] && \. "/opt/homebrew/opt/nvm/nvm.sh"
+[ -s "/opt/homebrew/opt/nvm/etc/bash_completion.d/nvm" ] && \. "/opt/homebrew/opt/nvm/etc/bash_completion.d/nvm"
