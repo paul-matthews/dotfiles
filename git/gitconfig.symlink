@@ -117,4 +117,4 @@
 	smudge = git-lfs smudge -- %f
 	process = git-lfs filter-process
 [gpg "ssh"]
-	allowedSignersFile = /Users/paulmatthews/.ssh/allowed_signers
+	allowedSignersFile = ~/.ssh/allowed_signers
