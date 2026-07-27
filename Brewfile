@@ -1,7 +1,5 @@
 cask_args appdir: '/Applications'
 
-tap 'homebrew/bundle'
-
 # Modern CLI tools
 brew 'bat'
 brew 'fd'
@@ -9,25 +7,30 @@ brew 'fzf'
 brew 'glow'
 brew 'ripgrep'
 brew 'spark'
+brew 'vim'
 brew 'wget'
+brew 'yt-dlp'
+brew 'zoxide'
 
 # Shell integrations
 brew 'direnv'
 brew 'starship'
-brew 'zoxide'
 
 # Git ecosystem
 brew 'git'
 brew 'git-delta'
 brew 'gh'
 brew 'lazygit'
+brew 'spaceman-diff'
 
 # Language toolchains
 brew 'go'
 brew 'node'
 brew 'nvm'
 brew 'pyenv'
+brew 'ruby-build'
 brew 'uv'
+brew 'yarn'
 
 # Editor
 brew 'macvim'
@@ -44,13 +47,8 @@ brew 'mpremote'
 # Network & utilities
 brew 'cloudflared'
 brew 'eza'
-brew 'fzf'
-brew 'starship'
-brew 'zoxide'
 brew 'imagemagick'
 brew 'nmap'
-brew 'yt-dlp'
-
 # Fonts
 cask 'font-meslo-lg-nerd-font'
 
@@ -62,6 +60,7 @@ cask 'arq'
 cask 'diffusionbee'
 cask 'ghostty'
 cask 'handbrake'
+cask 'macvim'
 cask 'messenger'
 cask 'notion-calendar'
 cask 'plex'
