@@ -32,3 +32,11 @@ symbol = " "
 
 [memory_usage]
 symbol = " "
+
+[custom.gandalf]
+command = "gandalf-prompt"
+when = "gandalf-prompt"
+format = "via [$symbol$output]($style) "
+symbol = "🧙‍♂️ "
+style = "bold cyan"
+
