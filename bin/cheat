@@ -93,6 +93,12 @@ ${S}━━━━━━━━━━━━━━━━━━━━━━━━━�
   ${C}tabcolor danger${R}         ${G}red + PROD badge${R}
   ${C}tabcolor reset${R}          ${G}back to default${R}
   ${C}tabcolor-preview${R} ${Y}<preset>${R}  ${G}show work vs Claude colors side by side${R}
+  
+  ${H}Workspace Layouts${R} ${D}(iTerm2)${R}
+  ${S}────────────────────────────────────${R}
+  ${C}iterm-layout new${R} ${Y}<layout>${R}  ${G}split tab horizontally (75/25) + run command${R}
+  ${C}iterm-layout apply${R} ${Y}<layout>${R}${G}apply split layout on current active tab${R}
+
 
 
 ${M}👁  Watching${R}

@@ -40,14 +40,14 @@ gwp                 prune stale trees           │    Tab1: gwa feat-a → work
 ,gs             git status (fugitive)           │  clogs           cosmic-logs
 ,n              NERDTree toggle                 │  ctime           cosmic-logs -l timeline
 ,w              save                            │
-,q              quit                            │  ## Tab Colors (iTerm2)
+,q              quit                            │  ## Tab Colors & Layouts (iTerm2)
 gcc             toggle comment                  │
-cs'"            change surround ' → "           │  tabcolor claude       orange + CLAUDE
-ds"             delete surrounding "            │  tabcolor cosmic       purple + PICO
-ysiw"           surround word with "            │  tabcolor dotfiles     green + SYS
-gd              go to definition (CoC)          │  tabcolor android      teal + ANDROID
-]q  [q          next/prev quickfix              │  tabcolor danger       red + PROD
-]b  [b          next/prev buffer                │  tabcolor reset        default
+cs'"            change surround ' → "           │  tabcolor <preset>     set tab color
+ds"             delete surrounding "            │  iterm-layout new <ly> split tab + cmd
+ysiw"           surround word with "            │  iterm-layout apply <ly>apply split on active tab
+gd              go to definition (CoC)          │  tabcolor reset        reset colors
+]q  [q          next/prev quickfix              │
+]b  [b          next/prev buffer                │
 
 ## Dotfiles & Tools                             │  Reading Files
                                                 │

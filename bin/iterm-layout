@@ -1,0 +1,127 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+#
+# requires-python = ">=3.11"
+# dependencies = [
+#     "iterm2",
+#     "PyYAML",
+# ]
+# ///
+
+import sys
+import os
+import yaml
+import iterm2
+
+CONFIG_PATH = os.path.expanduser("~/.iterm_layouts.yaml")
+
+def load_config():
+    if not os.path.exists(CONFIG_PATH):
+        print(f"Error: Configuration file not found at {CONFIG_PATH}")
+        print("Please copy the example file from iterm/iterm_layouts.yaml.example to ~/.iterm_layouts.yaml and edit it.")
+        sys.exit(1)
+    try:
+        with open(CONFIG_PATH, 'r') as f:
+            return yaml.safe_load(f)
+    except Exception as e:
+        print(f"Error reading configuration file: {e}")
+        sys.exit(1)
+
+async def main(connection):
+    if len(sys.argv) < 3:
+        print("Usage: iterm-layout <action> <layout_name>")
+        print("Actions: apply, new, window")
+        return
+        
+    action = sys.argv[1]
+    layout_name = sys.argv[2]
+    
+    config = load_config()
+    if layout_name not in config:
+        print(f"Error: Layout '{layout_name}' not found in configuration.")
+        print(f"Available layouts: {', '.join(config.keys())}")
+        return
+        
+    layout = config[layout_name]
+    
+    app = await iterm2.async_get_app(connection)
+    
+    if action == "window":
+        window = await iterm2.Window.async_create(connection)
+        tab = window.current_tab
+    else:
+        window = app.current_terminal_window
+        if not window:
+            print("No active iTerm2 window found.")
+            return
+        if action == "new":
+            tab = await window.async_create_tab()
+        else:  # apply
+            tab = window.current_tab
+            
+    if not tab:
+        print("No tab available.")
+        return
+        
+    top_session = tab.current_session
+    if not top_session:
+        print("No active session found in tab.")
+        return
+
+    panes_config = layout.get("panes", [])
+    if not panes_config:
+        print("Error: No panes defined in layout configuration.")
+        return
+
+    grid_size = top_session.grid_size
+    total_height = grid_size.height
+    total_width = grid_size.width
+
+    is_vertical = (layout.get("split", "horizontal") == "vertical")
+    
+    # Split the pane
+    bottom_session = await top_session.async_split_pane(vertical=is_vertical)
+    
+    # Apply sizes if specified
+    size_ratio = panes_config[0].get("size", 0.5)
+    
+    if is_vertical:
+        first_width = int(total_width * size_ratio)
+        second_width = total_width - first_width
+        top_session.preferred_size = iterm2.util.Size(first_width, total_height)
+        bottom_session.preferred_size = iterm2.util.Size(second_width, total_height)
+    else:
+        first_height = int(total_height * size_ratio)
+        second_height = total_height - first_height
+        top_session.preferred_size = iterm2.util.Size(total_width, first_height)
+        bottom_session.preferred_size = iterm2.util.Size(total_width, second_height)
+        
+    await tab.async_update_layout()
+
+    # Apply colors
+    tab_rgb = layout.get("tab_color")
+    bg_rgb = layout.get("bg_color")
+    
+    if tab_rgb or bg_rgb:
+        change = iterm2.LocalWriteOnlyProfile()
+        if tab_rgb:
+            change.set_tab_color(iterm2.Color(tab_rgb[0], tab_rgb[1], tab_rgb[2]))
+            change.set_use_tab_color(True)
+        if bg_rgb:
+            change.set_background_color(iterm2.Color(bg_rgb[0], bg_rgb[1], bg_rgb[2]))
+            
+        await top_session.async_set_profile_properties(change)
+        await bottom_session.async_set_profile_properties(change)
+
+    # Run commands
+    cmd1 = panes_config[0].get("command")
+    if cmd1:
+        await top_session.async_send_text(cmd1 + "\n")
+        
+    if len(panes_config) > 1:
+        cmd2 = panes_config[1].get("command")
+        if cmd2:
+            await bottom_session.async_send_text(cmd2 + "\n")
+
+if __name__ == "__main__":
+    iterm2.run_until_complete(main, True)

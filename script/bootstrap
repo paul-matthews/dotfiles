@@ -49,6 +49,16 @@ setup_gitconfig () {
   fi
 }
 
+setup_iterm_layouts () {
+  if ! [ -f iterm/iterm_layouts.yaml.symlink ]
+  then
+    info 'setup iterm layouts config'
+    cp iterm/iterm_layouts.yaml.example iterm/iterm_layouts.yaml.symlink
+    success 'iterm layouts config created (edit iterm/iterm_layouts.yaml.symlink to customize)'
+  fi
+}
+
+
 
 link_file () {
   local src=$1 dst=$2
@@ -152,6 +162,7 @@ install_configlinks () {
 }
 
 setup_gitconfig
+setup_iterm_layouts
 install_dotfiles
 install_configlinks
 
