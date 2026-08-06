@@ -1,19 +1,25 @@
 work:
+  tab_title: "Jetski Workspace"
   tab_color: [32, 100, 100]
   bg_color: [20, 35, 35]
   split: horizontal
   panes:
     - size: 0.75
+      title: "Jetski CLI"
       command: jetski
     - size: 0.25
+      title: "Terminal"
       command: ""
 
 claude-dev:
+  tab_title: "Claude Dev"
   tab_color: [100, 50, 120]
   bg_color: [30, 20, 35]
   split: vertical
   panes:
     - size: 0.5
+      title: "Claude CLI"
       command: claude
     - size: 0.5
+      title: "Dotfiles git"
       command: cd /Users/pmatthews/src/dotfiles && git status

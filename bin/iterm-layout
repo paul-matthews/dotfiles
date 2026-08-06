@@ -98,6 +98,20 @@ async def main(connection):
         
     await tab.async_update_layout()
 
+    # Apply tab title
+    tab_title = layout.get("tab_title")
+    if tab_title:
+        await tab.async_set_title(tab_title)
+
+    # Apply pane titles
+    title1 = panes_config[0].get("title")
+    if title1:
+        await top_session.async_set_name(title1)
+    if len(panes_config) > 1:
+        title2 = panes_config[1].get("title")
+        if title2:
+            await bottom_session.async_set_name(title2)
+
     # Apply colors
     tab_rgb = layout.get("tab_color")
     bg_rgb = layout.get("bg_color")
