@@ -6,5 +6,6 @@ atom.symlink/blob-store/
 atom.symlink/compile-cache/
 atom.symlink/storage/
 iterm/iterm_layouts.yaml.symlink
+envoy/
 
 
