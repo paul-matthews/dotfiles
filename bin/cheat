@@ -42,10 +42,11 @@ ${S}━━━━━━━━━━━━━━━━━━━━━━━━━�
   ${H}Navigate & Sync${R}
   ${S}────────────────────────────────────${R}
   ${C}gpl${R}             ${G}pull --prune${R}                    ${C}gco${R} ${Y}<branch>${R}    ${G}checkout${R}
-  ${C}gp${R}              ${G}push origin HEAD${R}                ${C}gb${R}              ${G}branch${R}
-  ${C}git up${R}          ${G}pull --rebase --autostash${R}       ${C}git cb${R} ${Y}<name>${R}   ${G}checkout -b${R}
-  ${C}git pf${R}          ${G}pull --ff-only${R}                  ${C}gcb${R}             ${G}copy branch name${R}
-  ${C}gh pr create${R}    ${G}GitHub CLI: create PR${R}           ${C}ge${R}              ${G}edit new files in git${R}
+  ${C}gsp${R}             ${G}safe pull (atomic rollback)${R}     ${C}gb${R}              ${G}branch${R}
+  ${C}gp${R}              ${G}push origin HEAD${R}                ${C}git cb${R} ${Y}<name>${R}   ${G}checkout -b${R}
+  ${C}git up${R}          ${G}pull --rebase --autostash${R}       ${C}gcb${R}             ${G}copy branch name${R}
+  ${C}git pf${R}          ${G}pull --ff-only${R}                  ${C}ge${R}              ${G}edit new files in git${R}
+  ${C}gh pr create${R}    ${G}GitHub CLI: create PR${R}
   ${C}gh pr view${R}      ${G}GitHub CLI: view PR${R}
 
 
