@@ -49,30 +49,29 @@ brew 'cloudflared'
 brew 'eza'
 brew 'imagemagick'
 brew 'nmap'
+
+
 # Fonts
 cask 'font-meslo-lg-nerd-font'
 
 # Apps
 cask '1password'
-cask 'airtable'
+
 cask 'android-platform-tools'
-cask 'arq'
-cask 'diffusionbee'
+
+
 cask 'ghostty'
-cask 'handbrake'
-cask 'macvim'
-cask 'messenger'
-cask 'notion-calendar'
-cask 'plex'
-cask 'qlvideo'
+
+
+cask 'quicklook-video'
 cask 'raspberry-pi-imager'
 cask 'raycast'
-cask 'sonos'
-cask 'steam'
-cask 'transmission'
+
+
+
 cask 'visual-studio-code'
 cask 'vlc'
-cask 'windsurf'
-cask 'whatsapp'
+cask 'devin-desktop'
+
 cask 'zed'
-cask 'zoom'
+

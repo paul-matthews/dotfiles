@@ -49,6 +49,16 @@ setup_gitconfig () {
   fi
 }
 
+setup_iterm_layouts () {
+  if [ "$(uname -s)" == "Darwin" ] && ! [ -f iterm/iterm_layouts.yaml.symlink ]
+  then
+    info 'setup iterm layouts config'
+    cp iterm/iterm_layouts.yaml.example iterm/iterm_layouts.yaml.symlink
+    success 'iterm layouts config created (edit iterm/iterm_layouts.yaml.symlink to customize)'
+  fi
+}
+
+
 
 link_file () {
   local src=$1 dst=$2
@@ -203,6 +213,10 @@ install_linux_packages () {
 }
 
 setup_gitconfig
+if [ "$(uname -s)" == "Darwin" ]
+then
+  setup_iterm_layouts
+fi
 setup_secrets
 install_dotfiles
 install_configlinks

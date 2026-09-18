@@ -1,0 +1,6 @@
+#compdef git-safe-pull gsp
+
+_arguments -S -A '-*' \
+  '(-h --help)'{-h,--help}'[Show usage, features, and atomic rollback explanation]' \
+  '(-v --verbose)'{-v,--verbose}'[Show detailed git command output]' \
+  '(-n --dry-run)'{-n,--dry-run}'[Check remote status without modifying working tree or history]' && ret=0
