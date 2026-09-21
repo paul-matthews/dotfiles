@@ -98,6 +98,8 @@
       "Use Tab Color": true,
       "Badge Text": "REMOTE",
       "Bound Hosts": [
+        "&ssh*",
+        "&mosh*",
         "*ubuntu*",
         "*cloud*"
       ]
