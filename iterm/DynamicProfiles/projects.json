@@ -83,20 +83,20 @@
       "Dynamic Profile Parent Name": "Default",
       "Background Color": {
         "Alpha Component": 1,
-        "Red Component": 0.1412,
-        "Green Component": 0.0784,
+        "Red Component": 0.1176,
+        "Green Component": 0.0941,
         "Blue Component": 0.0784,
         "Color Space": "sRGB"
       },
       "Tab Color": {
         "Alpha Component": 1,
-        "Red Component": 0.8000,
-        "Green Component": 0.2667,
-        "Blue Component": 0.2000,
+        "Red Component": 0.8039,
+        "Green Component": 0.5490,
+        "Blue Component": 0.2549,
         "Color Space": "sRGB"
       },
       "Use Tab Color": true,
-      "Badge Text": "REMOTE",
+      "Badge Text": "CLOUD",
       "Bound Hosts": [
         "&ssh*",
         "&mosh*",
