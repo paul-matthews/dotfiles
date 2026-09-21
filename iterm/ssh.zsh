@@ -15,6 +15,14 @@ _iterm_ssh_wrapper() {
     done
     [[ -z "$target" ]] && target="${*[-1]}"
 
+    # Set tab chrome color to Alert Ember/Red (220, 60, 50)
+    echo -ne "\033]6;1;bg;red;brightness;220\a"
+    echo -ne "\033]6;1;bg;green;brightness;60\a"
+    echo -ne "\033]6;1;bg;blue;brightness;50\a"
+
+    # Set background color to Deep Alert Ember (#241414)
+    printf "\033]11;#241414\007\033]1337;SetColors=bg=241414\007"
+
     # Set watermark badge to REMOTE
     printf "\e]1337;SetBadgeFormat=%s\a" "$(echo -n "REMOTE" | base64)"
 
@@ -26,6 +34,10 @@ _iterm_ssh_wrapper() {
   local ret=$?
 
   if [[ "$TERM_PROGRAM" == "iTerm.app" ]]; then
+    # Reset tab chrome color and background color to profile defaults
+    echo -ne "\033]6;1;bg;*;default\a"
+    printf "\033]111\007\033]1337;SetColors=bg=default\007"
+
     if [[ -n "$TERMINAL_ROLE" ]]; then
       role "$TERMINAL_ROLE" > /dev/null
     else
