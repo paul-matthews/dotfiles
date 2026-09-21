@@ -40,3 +40,10 @@ format = "via [$symbol$output]($style) "
 symbol = "🧙‍♂️ "
 style = "bold cyan"
 
+[env_var.TERMINAL_ROLE]
+variable = "TERMINAL_ROLE"
+format = "[$symbol$env_value]($style) "
+symbol = "🏷️ "
+style = "bold yellow"
+
+

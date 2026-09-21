@@ -1,0 +1,106 @@
+{
+  "Profiles": [
+    {
+      "Name": "Work",
+      "Guid": "7F504779-2489-4080-8FBC-D4AD09120311",
+      "Dynamic Profile Parent Name": "Default",
+      "Background Color": {
+        "Alpha Component": 1,
+        "Red Component": 0.0627,
+        "Green Component": 0.1020,
+        "Blue Component": 0.1686,
+        "Color Space": "sRGB"
+      },
+      "Tab Color": {
+        "Alpha Component": 1,
+        "Red Component": 0.1686,
+        "Green Component": 0.3608,
+        "Blue Component": 0.5608,
+        "Color Space": "sRGB"
+      },
+      "Use Tab Color": true,
+      "Badge Text": "WORK",
+      "Bound Hosts": [
+        "/*-work*",
+        "*:/*-work*",
+        "/*work*",
+        "*:/*work*"
+      ]
+    },
+    {
+      "Name": "Gandalf",
+      "Guid": "B5492FE5-8174-4399-96EA-970E671ABD34",
+      "Dynamic Profile Parent Name": "Default",
+      "Background Color": {
+        "Alpha Component": 1,
+        "Red Component": 0.1176,
+        "Green Component": 0.0745,
+        "Blue Component": 0.1608,
+        "Color Space": "sRGB"
+      },
+      "Tab Color": {
+        "Alpha Component": 1,
+        "Red Component": 0.4784,
+        "Green Component": 0.2863,
+        "Blue Component": 0.6471,
+        "Color Space": "sRGB"
+      },
+      "Use Tab Color": true,
+      "Badge Text": "GANDALF",
+      "Bound Hosts": [
+        "/*gandalf*",
+        "*:/*gandalf*"
+      ]
+    },
+    {
+      "Name": "Dotfiles",
+      "Guid": "58FBC333-B6B9-41B5-A0DF-0B2F8C0D006F",
+      "Dynamic Profile Parent Name": "Default",
+      "Background Color": {
+        "Alpha Component": 1,
+        "Red Component": 0.0667,
+        "Green Component": 0.1373,
+        "Blue Component": 0.0902,
+        "Color Space": "sRGB"
+      },
+      "Tab Color": {
+        "Alpha Component": 1,
+        "Red Component": 0.2000,
+        "Green Component": 0.5333,
+        "Blue Component": 0.2667,
+        "Color Space": "sRGB"
+      },
+      "Use Tab Color": true,
+      "Badge Text": "DOTFILES",
+      "Bound Hosts": [
+        "/*dotfiles*",
+        "*:/*dotfiles*"
+      ]
+    },
+    {
+      "Name": "Remote SSH",
+      "Guid": "881CAF86-3D2D-4C18-90F2-D4265A5B9D5B",
+      "Dynamic Profile Parent Name": "Default",
+      "Background Color": {
+        "Alpha Component": 1,
+        "Red Component": 0.1412,
+        "Green Component": 0.0784,
+        "Blue Component": 0.0784,
+        "Color Space": "sRGB"
+      },
+      "Tab Color": {
+        "Alpha Component": 1,
+        "Red Component": 0.8000,
+        "Green Component": 0.2667,
+        "Blue Component": 0.2000,
+        "Color Space": "sRGB"
+      },
+      "Use Tab Color": true,
+      "Badge Text": "REMOTE",
+      "Bound Hosts": [
+        "*ubuntu*",
+        "*cloud*"
+      ]
+    }
+  ]
+}

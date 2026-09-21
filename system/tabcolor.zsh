@@ -129,29 +129,12 @@ tabcolor-preview() {
   echo ""
 }
 
-# Auto-apply tab color from TABCOLOR_PRESET env var (set by direnv),
-# or reset when leaving a direnv-managed directory.
-# Tracks last-applied preset to avoid redundant escape codes on every prompt.
-_TABCOLOR_LAST=""
+# Auto-apply tab color from TABCOLOR_PRESET env var was disabled in favor
+# of iTerm2 Automatic Profile Switching (Dynamic Profiles).
+# The manual `tabcolor <preset>` command remains available.
+#
+# _TABCOLOR_LAST=""
+# _tabcolor_hook() { ... }
+# autoload -Uz add-zsh-hook
+# add-zsh-hook precmd _tabcolor_hook
 
-_tabcolor_hook() {
-  local want="${TABCOLOR_PRESET:-}"
-  [[ -z "$DIRENV_DIR" ]] && want=""
-
-  # Only act when the preset changes
-  [[ "$want" == "$_TABCOLOR_LAST" ]] && return
-
-  if [[ -n "$want" ]]; then
-    tabcolor "$want"
-  else
-    reset_tab_color
-    clear_badge
-    set_tab_title "$(basename $PWD)"
-  fi
-  _TABCOLOR_LAST="$want"
-}
-
-# precmd fires after every command (including after direnv updates env).
-# chpwd alone isn't enough because direnv's hook runs after chpwd.
-autoload -Uz add-zsh-hook
-add-zsh-hook precmd _tabcolor_hook

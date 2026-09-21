@@ -58,6 +58,18 @@ setup_iterm_layouts () {
   fi
 }
 
+setup_iterm_dynamic_profiles () {
+  if [ "$(uname -s)" == "Darwin" ]
+  then
+    info 'setup iterm dynamic profiles and shell integration'
+    mkdir -p "$HOME/Library/Application Support/iTerm2/DynamicProfiles"
+    link_file "$DOTFILES_ROOT/iterm/DynamicProfiles/projects.json" "$HOME/Library/Application Support/iTerm2/DynamicProfiles/projects.json"
+    link_file "$DOTFILES_ROOT/iterm/iterm2_shell_integration.zsh" "$HOME/.iterm2_shell_integration.zsh"
+    success 'iterm dynamic profiles and shell integration'
+  fi
+}
+
+
 
 
 link_file () {
@@ -163,6 +175,7 @@ install_configlinks () {
 
 setup_gitconfig
 setup_iterm_layouts
+setup_iterm_dynamic_profiles
 install_dotfiles
 install_configlinks
 
