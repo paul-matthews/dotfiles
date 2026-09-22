@@ -49,7 +49,9 @@
       "Badge Text": "GANDALF",
       "Bound Hosts": [
         "/*gandalf*",
-        "*:/*gandalf*"
+        "*:/*gandalf*",
+        "/*Gandalf*",
+        "*:/*Gandalf*"
       ]
     },
     {
