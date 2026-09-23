@@ -23,8 +23,8 @@ _iterm_ssh_wrapper() {
     # Set background color to Deep Warm Charcoal / Espresso (#1e1814)
     printf "\033]11;#1e1814\007\033]1337;SetColors=bg=1e1814\007"
 
-    # Set watermark badge to CLOUD
-    printf "\e]1337;SetBadgeFormat=%s\a" "$(echo -n "CLOUD" | base64)"
+    # Set watermark badge to ☁️ Rem
+    printf "\e]1337;SetBadgeFormat=%s\a" "$(echo -n "☁️ Rem" | base64)"
 
     # Set window & tab title to show remote connection
     print -Pn "\e]1;☁️  ${target}\a\e]2;☁️  ${target}\a\e]0;☁️  ${target}\a"

@@ -19,7 +19,7 @@
         "Color Space": "sRGB"
       },
       "Use Tab Color": true,
-      "Badge Text": "WORK",
+      "Badge Text": "🔮 Obs",
       "Bound Hosts": [
         "/*-work*",
         "*:/*-work*",
@@ -52,7 +52,7 @@
         "Color Space": "sRGB"
       },
       "Use Tab Color": true,
-      "Badge Text": "GANDALF",
+      "Badge Text": "🧙‍♂️ Gan",
       "Bound Hosts": [
         "/*gandalf*",
         "*:/*gandalf*",
@@ -79,7 +79,7 @@
         "Color Space": "sRGB"
       },
       "Use Tab Color": true,
-      "Badge Text": "DOTFILES",
+      "Badge Text": "⚙️ Dot",
       "Bound Hosts": [
         "/*dotfiles*",
         "*:/*dotfiles*"
@@ -104,7 +104,7 @@
         "Color Space": "sRGB"
       },
       "Use Tab Color": true,
-      "Badge Text": "CLOUD",
+      "Badge Text": "☁️ Rem",
       "Bound Hosts": [
         "&ssh*",
         "&mosh*",
