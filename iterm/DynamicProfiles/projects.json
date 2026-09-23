@@ -6,16 +6,16 @@
       "Dynamic Profile Parent Name": "Default",
       "Background Color": {
         "Alpha Component": 1,
-        "Red Component": 0.0627,
-        "Green Component": 0.1020,
-        "Blue Component": 0.1686,
+        "Red Component": 0.0824,
+        "Green Component": 0.0627,
+        "Blue Component": 0.1216,
         "Color Space": "sRGB"
       },
       "Tab Color": {
         "Alpha Component": 1,
-        "Red Component": 0.1686,
-        "Green Component": 0.3608,
-        "Blue Component": 0.5608,
+        "Red Component": 0.6549,
+        "Green Component": 0.5451,
+        "Blue Component": 0.9804,
         "Color Space": "sRGB"
       },
       "Use Tab Color": true,
@@ -24,7 +24,13 @@
         "/*-work*",
         "*:/*-work*",
         "/*work*",
-        "*:/*work*"
+        "*:/*work*",
+        "/*obsidian*",
+        "*:/*obsidian*",
+        "/*Obsidian*",
+        "*:/*Obsidian*",
+        "/*pmatthews-work*",
+        "*:/*pmatthews-work*"
       ]
     },
     {
@@ -33,16 +39,16 @@
       "Dynamic Profile Parent Name": "Default",
       "Background Color": {
         "Alpha Component": 1,
-        "Red Component": 0.1176,
-        "Green Component": 0.0745,
-        "Blue Component": 0.1608,
+        "Red Component": 0.0353,
+        "Green Component": 0.0667,
+        "Blue Component": 0.1137,
         "Color Space": "sRGB"
       },
       "Tab Color": {
         "Alpha Component": 1,
-        "Red Component": 0.4784,
-        "Green Component": 0.2863,
-        "Blue Component": 0.6471,
+        "Red Component": 0.0000,
+        "Green Component": 0.7216,
+        "Blue Component": 0.9608,
         "Color Space": "sRGB"
       },
       "Use Tab Color": true,
@@ -60,16 +66,16 @@
       "Dynamic Profile Parent Name": "Default",
       "Background Color": {
         "Alpha Component": 1,
-        "Red Component": 0.0667,
-        "Green Component": 0.1373,
-        "Blue Component": 0.0902,
+        "Red Component": 0.0471,
+        "Green Component": 0.0863,
+        "Blue Component": 0.0627,
         "Color Space": "sRGB"
       },
       "Tab Color": {
         "Alpha Component": 1,
-        "Red Component": 0.2000,
-        "Green Component": 0.5333,
-        "Blue Component": 0.2667,
+        "Red Component": 0.2039,
+        "Green Component": 0.8275,
+        "Blue Component": 0.6000,
         "Color Space": "sRGB"
       },
       "Use Tab Color": true,
