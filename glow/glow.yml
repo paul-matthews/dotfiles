@@ -1,0 +1,17 @@
+# Glow configuration
+# Managed by dotfiles (works across macOS & Linux)
+
+# Style name: "auto", "dark", "light", or path to glamour json style
+style: "dark"
+
+# Enable mouse wheel scrolling in interactive TUI mode
+mouse: true
+
+# Use pager to display markdown
+pager: true
+
+# Word-wrap at width (0 = auto-detect terminal width)
+width: 0
+
+# Preserve newlines in output
+preserveNewLines: true

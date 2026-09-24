@@ -69,6 +69,19 @@ setup_iterm_dynamic_profiles () {
   fi
 }
 
+setup_glow () {
+  info 'setup glow config'
+  mkdir -p "$HOME/.config/glow"
+  link_file "$DOTFILES_ROOT/glow/glow.yml" "$HOME/.config/glow/glow.yml"
+
+  if [ "$(uname -s)" == "Darwin" ]
+  then
+    mkdir -p "$HOME/Library/Preferences/glow"
+    link_file "$DOTFILES_ROOT/glow/glow.yml" "$HOME/Library/Preferences/glow/glow.yml"
+  fi
+  success 'glow config'
+}
+
 
 
 
@@ -176,6 +189,7 @@ install_configlinks () {
 setup_gitconfig
 setup_iterm_layouts
 setup_iterm_dynamic_profiles
+setup_glow
 install_dotfiles
 install_configlinks
 
