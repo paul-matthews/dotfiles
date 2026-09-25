@@ -17,7 +17,7 @@ Shell secrets (exports, aliases, real paths) shared by every machine, encrypted 
 Tab colour, title and badge follow the project: `.envrc` preset first, else the path map in `system/tabcolor-presets.sh`.
 
 - `role device` → tab reads `🪐 COS / device`; `role` clears; `role -s` shows (`rgit`, `rbuild`, `rdevice`, `rclear`)
-- `claude` / `jc` → darkened project colour, 🤖 title, tool badge; restored on exit
+- `claude` / `agy` (and `jc` / `jetski` at work) → darkened project colour, 🤖 title, tool badge; restored on exit
 - `ssh host` → amber tab while connected, project colour back after
 - `tabcolor <preset>` · `tabcolor danger` · `tabcolor reset` · `tabcolor-preview <preset>`
 - `gsp` → verified pull: fetch, rebase, `script/test`, roll back on failure

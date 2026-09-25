@@ -2,8 +2,8 @@
 # with a "🤖" title and a badge naming the tool, then restores the project tab
 # when the tool exits. The wrapper never parses arguments; "$@" passes through.
 #
-# Shared: claude. Work machines add jc in system/ai-tabs.work.zsh.
-# Add another tool with:  _ai_tab_wrap <command> <BADGE> "$@"
+# Shared: claude, agy. Work machines add jc and jetski in system/ai-tabs.work.zsh.
+# Add another tool by appending name:BADGE to _AI_TAB_CMDS.
 
 _ai_tab_wrap() {
   local name="$1" badge="$2"
@@ -29,9 +29,13 @@ _ai_tab_wrap() {
   return $rc
 }
 
-# Commands to wrap: name BADGE. Work machines append to this in ai-tabs.work.zsh.
+# Commands to wrap, as name:BADGE. Work machines append to this in ai-tabs.work.zsh.
+# _ai_tabs_finalize (called at the end of zshrc) defines a wrapper function for
+# each name, converting an alias of that name if ~/.localrc defined one.
+#   claude  Claude Code
+#   agy     Antigravity CLI (the public one, installed to ~/.local/bin)
 typeset -ga _AI_TAB_CMDS
-_AI_TAB_CMDS=(claude:CLAUDE)
+_AI_TAB_CMDS=(claude:CLAUDE agy:ANTIGRAVITY)
 
 # Some tools are aliases (jc on work machines, defined in ~/.localrc, which
 # loads after the topic files). An alias wins over a function of the same
@@ -81,4 +85,3 @@ _ai_tabs_finalize() {
   done
 }
 
-claude() { _ai_tab_wrap claude CLAUDE "$@"; }

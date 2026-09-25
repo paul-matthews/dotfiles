@@ -37,7 +37,7 @@ print -r -- "PROJECTS=$PROJECTS"
 print -r -- "PATH=$PATH"
 print -r -- "DOTFILES_PROFILE=$DOTFILES_PROFILE"
 print -r -- "DOTFILES_TAGS=$DOTFILES_TAGS"
-for f in tabcolor gwa cpush role reload! gsp gandalf_prompt_precmd claude _tabcolor_preset_for; do
+for f in tabcolor gwa cpush role reload! gsp gandalf_prompt_precmd claude agy _tabcolor_preset_for; do
   print -r -- "WHENCE:$f=$(whence -w $f 2>/dev/null)"
 done
 print -r -- "PRESET_COSMIC=$(TABCOLOR_PRESET= _tabcolor_preset_for $HOME/src/pico/cosmic-clock 2>/dev/null)"
@@ -155,7 +155,7 @@ fi
 #------------------------------------------------------------------------------
 # 4. Topic functions and aliases that must exist
 #------------------------------------------------------------------------------
-for spec in tabcolor:function gwa:function cpush:function role:function claude:function reload!:alias gsp:alias; do
+for spec in tabcolor:function gwa:function cpush:function role:function claude:function agy:function reload!:alias gsp:alias; do
   name="${spec%%:*}"; kind="${spec##*:}"
   actual="$(whence_kind main "$name")"
   [[ "$actual" == "$kind" ]] && ok "$name is a $kind" || bad "$name is '${actual:-missing}', expected $kind"
