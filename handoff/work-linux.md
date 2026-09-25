@@ -3,115 +3,133 @@
 Read `handoff/README.md` first. Every step: command, what to expect, test.
 Log as you go with `bin/handoff note` and `bin/handoff capture`.
 
+This machine is special in three ways, and the order of steps below exists
+because of them. Do not reorder.
+
+1. It has been tracking the `linux` branch, not `master`. Master now contains
+   everything that branch had, but this checkout may hold commits or edits that
+   were never pushed. They must be carried, not discarded.
+2. It holds the only plain-text copy of the old shared secrets at
+   `~/.localrc.secrets`. That content must be published before anything pulls.
+3. Its age key from the old setup is at `~/.age/key.txt`, and `~/.localrc`
+   exports that path. The new tooling adopts that key; it must not generate a
+   second one.
+
 Any apt-based distro is supported. `script/install` needs `sudo apt-get`; if sudo
-asks for a password you cannot give, stop at that step and report it.
+asks for a password you cannot give, use the `--no-install` variant in step 5.
 
-## 1. Get the repo onto master and up to date
+## 1. Record the starting state
 
-Fresh machine only (skip if `~/src/system/dotfiles` exists):
-
-```sh
-sudo apt-get install -y git zsh
-git clone git@github.com:paul-matthews/dotfiles.git ~/src/system/dotfiles
-ln -s ~/src/system/dotfiles ~/.dotfiles
-```
-
-Then, in `~/src/system/dotfiles`:
+In the dotfiles directory (`cd ~/.dotfiles` if unsure):
 
 ```sh
 bin/handoff note "runbook work-linux.md, run $(date +%F)"
 bin/handoff capture "cat /etc/os-release"
 bin/handoff capture "uname -a"
-bin/handoff capture "git status --short"
-bin/handoff capture "git log --oneline -3"
+bin/handoff capture "echo \$SHELL; ls -la ~/.dotfiles"
 bin/handoff capture "git branch --show-current"
+bin/handoff capture "git status --short"
+bin/handoff capture "git fetch origin && git log --oneline origin/linux..HEAD"
 bin/handoff capture "ls ~"
+bin/handoff capture "ls -la ~/.age ~/.config/sops/age 2>&1; grep -n SOPS_AGE_KEY_FILE ~/.localrc"
+bin/handoff capture "grep -vc '^[[:space:]]*#' ~/.localrc.secrets 2>&1"
 ```
 
-This machine previously tracked the `linux` branch. Master now contains everything
-that branch had. If `git branch --show-current` is not `master`:
+Expect: branch `linux`; the `origin/linux..HEAD` list is usually empty (unpushed
+local commits if not); `~/.age/key.txt` exists; the last line is a count of real
+lines in the old secrets file (`0` or an error means nothing to restore).
 
-```sh
-git checkout master
-```
+## 2. Move to your branch, carrying everything local
 
-If `git status --short` printed anything, do **not** discard it. Go to step 2 first,
-commit it there, then come back.
-
-```sh
-bin/git-safe-pull
-```
-
-Expect: `Already up to date` or `Successfully synchronized`. Anything else: stop and report.
-
-## 2. Move to your branch
+Stay on `linux`; do **not** check out master first. `bin/handoff branch` creates
+`from/<id>` from the branch you are on, so unpushed commits and uncommitted edits
+come along.
 
 ```sh
 bin/handoff branch
+git add -A && git commit -m "local changes found on $(bin/handoff id) before setup" || true
+git merge --no-edit origin/master
+bin/handoff capture "git log --oneline -3"
 ```
 
-Expect: `on branch from/<id>`. Commit any pre-existing changes now:
+Expect: `on branch from/<id>`, then either a merge commit or `Already up to date`.
+A conflict means stop: `bin/handoff capture "git status"`, report, do not resolve.
+
+## 3. Adopt the old key
 
 ```sh
-git add -A && git commit -m "local changes found on $(bin/handoff id) before setup"
+bin/secrets keygen
+bin/handoff capture "bin/secrets status"
 ```
 
-## 3. Set the machine up
+Expect: `adopted the existing age key from /home/<you>/.age/key.txt` and
+`recipient: yes`. If it says `generated` instead, stop and report: the old key
+was not found where expected.
+
+## 4. Publish the old secrets before anything pulls
+
+Only if step 1's count was greater than 0:
+
+```sh
+bin/secrets push --force
+bin/handoff capture "bin/secrets status"
+git add secrets.sops.yaml && git commit -m "secrets: restore content from $(bin/handoff id)"
+```
+
+Expect: `encrypted ... for N recipient(s); commit it` and `state: in sync`.
+This replaces the placeholder the other machines currently have with the real
+content, encrypted for every machine. If the count was 0, skip this step and
+`bin/handoff note "no old secrets content to restore"`.
+
+## 5. Set the machine up
 
 ```sh
 script/setup --profile work
 ```
 
-Expect, in order: bootstrap output, `apt-get update` then one `OK` line per package
-from `linux/packages.txt` (a `no installable package among:` warning is fine, note
-it), starship's installer if missing, bootstrap again (prints your public age key the
-first time), then `script/test` ending in `PASS`.
+If `script/install` stops on a sudo prompt: `script/setup --profile work --no-install`
+and `bin/handoff note "install skipped: sudo not available"`.
 
-This machine already holds an age key from the old setup. If `~/.config/sops/age/keys.txt`
-is missing but `~/.age/key.txt` or another key exists, do not generate a new one: stop
-and report where the existing key is.
-
-Test: the last line of output is `PASS: N checks passed, M skipped`.
+Expect: bootstrap output (`already in place` lines are fine; note anything
+`left alone`), apt output with one `OK` per package (a `no installable package`
+warning is fine, note it), bootstrap again ending in `secrets decrypted` or
+`secrets: kept the existing ~/.localrc.secrets`, then `script/test` ending in
+`PASS`.
 
 ```sh
 bin/handoff capture "script/test"
 ```
 
-If your login shell is not zsh, note it in the report rather than changing it
-(`chsh` needs a password): `bin/handoff capture "echo $SHELL"`.
+`FAIL` means stop; the captured output is the report.
 
-## 4. Restore the secrets this machine held
-
-This machine could decrypt the previous `secrets.sops.yaml` and may still have the
-plain-text copy at `~/.localrc.secrets`. If that file exists and contains more than
-comments, publish it so the other machines get it back:
+## 6. Check what this machine looks like from the new shell
 
 ```sh
-bin/handoff capture "grep -vc '^#' ~/.localrc.secrets"
-bin/secrets push --force
-git add secrets.sops.yaml
+bin/handoff capture "TERM=xterm-256color zsh -ic 'echo PROFILE=\$DOTFILES_PROFILE TAGS=\$DOTFILES_TAGS PROJECTS=\$PROJECTS; whence -w jc jetski agy'"
 ```
 
-Expect: `encrypted ... for 2 recipient(s)` or more. If the file does not exist or has
-only comments, skip this step and say so.
+Expect: `PROFILE=work TAGS=work linux`, `PROJECTS=/home/<you>/src`, and the three
+tools as `function`. If your repos do not live in `~/src`, say so in the report.
 
-## 5. Check what this machine looks like from the new shell
-
-```sh
-bin/handoff capture "zsh -ic 'echo PROFILE=\$DOTFILES_PROFILE TAGS=\$DOTFILES_TAGS PROJECTS=\$PROJECTS; whence -w jc'"
-```
-
-Expect: `PROFILE=work TAGS=work linux`, `PROJECTS=/home/<you>/src`, `jc: function`.
-If your repos do not live in `~/src`, say so in the report.
-
-## 6. Report
+## 7. Report
 
 ```sh
 bin/handoff key
-bin/handoff result "done" "add my key as a secrets recipient if secrets did not decrypt: handoff/keys/$(bin/handoff id).age.pub"
+bin/handoff result "done" "nothing"
 bin/handoff report
 bin/handoff commit
 ```
 
-If you stopped early: `bin/handoff result "stopped at step N" "<what happened>"`, then
-`report` and `commit` exactly the same way.
+If you stopped early: `bin/handoff result "stopped at step N" "<what happened>"`,
+then `report` and `commit` exactly the same way.
+
+## After home has merged
+
+You will be told to run again. Then, and only then, switch to master:
+
+```sh
+git checkout master && bin/git-safe-pull && bin/handoff branch
+script/setup --profile work
+bin/handoff capture "script/test"
+bin/handoff result "done" "nothing" && bin/handoff report && bin/handoff commit
+```

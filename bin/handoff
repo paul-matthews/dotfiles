@@ -26,7 +26,8 @@ LOG="$HOME/.dotfiles-handoff-report.md"
 cmd="${1:-}"
 shift || true
 
-profile () { [ -r "$HOME/.dotfiles-profile" ] && tr -d '[:space:]' < "$HOME/.dotfiles-profile" || echo home; }
+# Empty when no profile has been recorded yet (a machine before its first setup)
+profile () { [ -r "$HOME/.dotfiles-profile" ] && tr -d '[:space:]' < "$HOME/.dotfiles-profile" || true; }
 os () { uname -s | tr '[:upper:]' '[:lower:]'; }
 
 machine_id () {
@@ -34,7 +35,8 @@ machine_id () {
     local rand
     # od reads exactly 8 bytes, so nothing here can die on SIGPIPE under pipefail
     rand="$(od -An -N8 -tx1 /dev/urandom | tr -d ' \n' | cut -c1-6)"
-    printf '%s-%s-%s\n' "$(profile)" "$(os)" "$rand" > "$ID_FILE"
+    local p; p="$(profile)"
+    printf '%s-%s-%s\n' "${p:-work}" "$(os)" "$rand" > "$ID_FILE"
   fi
   printf '%s\n' "$(tr -d '[:space:]' < "$ID_FILE")"
 }
@@ -48,6 +50,8 @@ case "$cmd" in
   branch)
     id="$(machine_id)"
     cd "$ROOT"
+    # Handoff machines are never the blessed home Mac: signing off for this repo
+    # unless the profile is explicitly home, so commits work before setup has run
     if [ "$(profile)" != "home" ]; then
       git config --local commit.gpgsign false
     fi

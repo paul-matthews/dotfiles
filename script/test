@@ -309,6 +309,28 @@ else
   skp "secrets" "no secrets.sops.yaml or sops not installed"
 fi
 
+if command -v sops >/dev/null 2>&1 && command -v age-keygen >/dev/null 2>&1; then
+  # keygen adopts a key from an older setup instead of generating a second one
+  fake="$tmp/fakehome"; mkdir -p "$fake/.age"
+  age-keygen -o "$fake/.age/key.txt" 2>/dev/null
+  if HOME="$fake" SOPS_AGE_KEY_FILE= "$DOTFILES_ROOT/bin/secrets" keygen >/dev/null 2>&1 \
+     && cmp -s "$fake/.age/key.txt" "$fake/.config/sops/age/keys.txt"; then
+    ok "secrets keygen adopts an existing ~/.age/key.txt instead of generating a new key"
+  else
+    bad "secrets keygen did not adopt the existing ~/.age/key.txt"
+  fi
+  # pull refuses to overwrite a never-pulled local file that differs
+  if [[ -f "$DOTFILES_ROOT/secrets.sops.yaml" ]] && "$DOTFILES_ROOT/bin/secrets" check >/dev/null 2>&1; then
+    echo "# old local content" > "$tmp/olddec"
+    rc=0; SECRETS_DEC="$tmp/olddec" SECRETS_STATE="$tmp/nostate" "$DOTFILES_ROOT/bin/secrets" pull >/dev/null 2>&1 || rc=$?
+    if [[ $rc -eq 3 && "$(cat "$tmp/olddec")" == "# old local content" ]]; then
+      ok "secrets pull keeps a never-pulled local file that differs from the repo"
+    else
+      bad "secrets pull overwrote or mishandled a never-pulled local file (rc=$rc)"
+    fi
+  fi
+fi
+
 #------------------------------------------------------------------------------
 echo
 if [[ $fail -eq 0 ]]; then

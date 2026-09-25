@@ -265,6 +265,7 @@ setup_secrets () {
   case $rc in
     0) success "secrets decrypted to ~/.localrc.secrets" ;;
     2) info "secrets: this machine cannot decrypt yet; see: secrets status" ;;
+    3) info "secrets: kept the existing ~/.localrc.secrets (never pulled here); see: secrets status" ;;
     *) info "secrets: pull failed (rc=$rc); see: secrets status" ;;
   esac
 }
