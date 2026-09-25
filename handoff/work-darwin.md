@@ -79,11 +79,13 @@ shell; no iTerm profile switching is needed.
 ## 5. Check what this machine looks like from the new shell
 
 ```sh
-bin/handoff capture "zsh -ic 'echo PROFILE=\$DOTFILES_PROFILE TAGS=\$DOTFILES_TAGS PROJECTS=\$PROJECTS; whence -w jc gandalf_prompt_precmd'"
+bin/handoff capture "TERM=xterm-256color zsh -ic 'echo PROFILE=\$DOTFILES_PROFILE TAGS=\$DOTFILES_TAGS PROJECTS=\$PROJECTS; whence -w jc jetski agy gandalf_prompt_precmd'"
+bin/handoff capture "TERM=xterm-256color zsh -ic 'whence -v jc; grep -n \"alias jc\" ~/.localrc ~/.localrc.secrets ~/.zlogin ~/.zshenv ~/.zprofile ~/.zshrc.local /etc/zshrc /etc/zprofile 2>/dev/null'"
 ```
 
 Expect: `PROFILE=work TAGS=work darwin`, `PROJECTS=/Users/<you>/src`, `jc: function`,
-and `gandalf_prompt_precmd: function` only if Gandalf is installed. If your repos do not
+`jetski: function`, and `gandalf_prompt_precmd: function` only if Gandalf is installed.
+The second command shows where `jc` is defined; capture it whatever it says. If your repos do not
 live in `~/src`, say so in the report: `PROJECTS` will need a work override.
 
 ## 6. Report

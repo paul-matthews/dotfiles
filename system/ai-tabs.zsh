@@ -71,6 +71,15 @@ _ai_tab_wrap_expansion() {
   return $rc
 }
 
+# Run finalize once more at the first prompt: that is after zshrc, ~/.localrc,
+# ~/.zlogin and anything else that may define one of these names as an alias.
+_ai_tabs_finalize_once() {
+  _ai_tabs_finalize
+  add-zsh-hook -d precmd _ai_tabs_finalize_once
+}
+autoload -Uz add-zsh-hook
+add-zsh-hook precmd _ai_tabs_finalize_once
+
 _ai_tabs_finalize() {
   local entry name badge expansion
   for entry in "${_AI_TAB_CMDS[@]}"; do
