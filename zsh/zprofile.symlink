@@ -6,8 +6,8 @@ export PROJECTS=~/src
 
 eval "$(/opt/homebrew/bin/brew shellenv)"
 
-# Added by Obsidian
-export PATH="$PATH:/Applications/Obsidian.app/Contents/MacOS"
+# Obsidian CLI, only where the app is installed
+[[ -d /Applications/Obsidian.app/Contents/MacOS ]] && export PATH="$PATH:/Applications/Obsidian.app/Contents/MacOS"
 
 # Added by OrbStack: command-line tools and integration
 # This won't be added again if you remove it.

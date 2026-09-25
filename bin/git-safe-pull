@@ -42,6 +42,8 @@ How it works:
   3. Fetches upstream changes and checks divergence.
   4. If you have NO unpushed commits: fast-forwards cleanly (never prompts for signing keys).
   5. If you have unpushed commits: rebases and re-signs them with your server key.
+  6. If the repo has an executable script/test, runs it after the pull; a failure
+     rolls the pull back. Set GSP_NO_VERIFY=1 to skip (emergency use only).
   6. Reapplies your uncommitted edits onto the updated branch.
   7. If ANY failure occurs (network, conflict, signing key, stash collision):
      Atomically rolls back the branch to PRE_HEAD and restores your uncommitted edits.
@@ -195,6 +197,26 @@ fi
 
 UPSTREAM_HASH="$(git rev-parse "$UPSTREAM")"
 
+# Post-pull verification: a repo that ships script/test must still pass it.
+# Returns 0 when there is nothing to run or the test passes.
+run_verify() {
+  local test_script
+  test_script="$(git rev-parse --show-toplevel 2>/dev/null)/script/test"
+  [[ -x "$test_script" ]] || return 0
+  if [[ "${GSP_NO_VERIFY:-}" == "1" ]]; then
+    echo -e "\033[33m⚠️  GSP_NO_VERIFY=1: skipping script/test.\033[0m" >&2
+    return 0
+  fi
+  echo -e "\033[34m🧪 Verifying with script/test...\033[0m"
+  local output
+  if output="$("$test_script" 2>&1)"; then
+    echo -e "\033[32m✅ script/test passed.\033[0m"
+    return 0
+  fi
+  echo "$output" | grep -E '✗|FAIL|^      ' >&2
+  return 1
+}
+
 # 4. Check if already up to date
 if [[ "$PRE_HEAD" == "$UPSTREAM_HASH" ]]; then
   if [[ "$STASH_CREATED" == true && -n "$STASH_SHA" ]]; then
@@ -202,6 +224,7 @@ if [[ "$PRE_HEAD" == "$UPSTREAM_HASH" ]]; then
   fi
   trap - INT TERM HUP EXIT
   echo -e "\033[1;32m✨ Already up to date with ${UPSTREAM} (${UPSTREAM_HASH:0:7}).\033[0m"
+  run_verify || { echo -e "\033[1;31m❌ script/test fails on the current checkout (nothing was changed).\033[0m" >&2; exit 1; }
   exit 0
 fi
 
@@ -262,6 +285,18 @@ if [[ "$STASH_CREATED" == true && -n "$STASH_SHA" ]]; then
     fi
     rollback "Stash application collision with incoming changes."
   fi
+fi
+
+# 7. Verify the result; a failing script/test rolls everything back
+if ! run_verify; then
+  # Local edits were reapplied in step 6; park them again so the rollback can
+  # reset the tree cleanly and then restore them exactly as before.
+  if [[ "$STASH_CREATED" == true ]]; then
+    if git stash push -u -q -m "safe-pull-verify-rollback-$(date +%s)-$$" 2>/dev/null; then
+      STASH_SHA="$(git rev-parse -q --verify refs/stash)"
+    fi
+  fi
+  rollback "script/test failed after the pull; restored ${PRE_HEAD:0:7}."
 fi
 
 trap - INT TERM HUP EXIT

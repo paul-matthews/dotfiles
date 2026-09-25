@@ -7,6 +7,4 @@ atom.symlink/compile-cache/
 atom.symlink/storage/
 iterm/iterm_layouts.yaml.symlink
 envoy/
-!bin/
-
-
+.claude/settings.local.json

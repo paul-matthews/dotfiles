@@ -1,0 +1,158 @@
+#!/usr/bin/env bash
+#
+# script/test — verify the dotfiles load correctly in a fresh interactive zsh.
+#
+# Starts a new `zsh -i` under a pseudo-terminal (so it sees exactly what a
+# terminal tab sees), collects facts from it, and checks them against what
+# CLAUDE.md promises. Exit 0 means every check passed.
+#
+# Used by:
+#   - each phase of the normalisation plan, as its "Test:" line
+#   - `gsp` after every pull (a failure rolls the pull back)
+#   - the work-machine handoff runbooks, whose reports quote its output
+#
+# Add a check here whenever a change adds a promise worth keeping.
+
+set -u
+cd "$(dirname "$0")/.." || exit 2
+DOTFILES_ROOT="$(pwd -P)"
+
+pass=0
+fail=0
+skip=0
+ok()   { printf '  \033[32m✓\033[0m %s\n' "$1"; pass=$((pass + 1)); }
+bad()  { printf '  \033[31m✗\033[0m %s\n' "$1"; fail=$((fail + 1)); }
+skp()  { printf '  \033[33m-\033[0m %s (skipped: %s)\n' "$1" "$2"; skip=$((skip + 1)); }
+
+tmp="$(mktemp -d)"
+trap 'rm -rf "$tmp"' EXIT
+
+#------------------------------------------------------------------------------
+# 1. Start a fresh interactive zsh under a pty, stderr captured separately
+#------------------------------------------------------------------------------
+probe='
+print
+print -r -- "EDITOR=$EDITOR"
+print -r -- "PROJECTS=$PROJECTS"
+print -r -- "PATH=$PATH"
+for f in tabcolor gwa cpush role reload! gsp; do
+  print -r -- "WHENCE:$f=$(whence -w $f 2>/dev/null)"
+done
+print -r -- "PROBE_DONE"
+'
+inner="zsh -ic \"\$0\" 2>\"\$1\""
+
+if script --version >/dev/null 2>&1; then
+  # util-linux script (Linux)
+  script -qec "zsh -c '$inner' \"\$probe\" \"$tmp/err\"" /dev/null >"$tmp/out" 2>/dev/null \
+    < /dev/null
+else
+  # BSD script (macOS)
+  script -q /dev/null zsh -c "$inner" "$probe" "$tmp/err" >"$tmp/out" 2>/dev/null </dev/null
+fi
+# strip CRs, OSC escape sequences (iTerm shell integration) and other control chars
+perl -pe 's/\r//g; s/\e\][^\a\e]*(\a|\e\\)//g; s/\e\[[0-9;?]*[A-Za-z]//g; s/[\x00-\x08\x0b-\x1f]//g' <"$tmp/out" >"$tmp/out.clean"
+
+get() { grep -m1 "^$1=" "$tmp/out.clean" | cut -d= -f2-; }
+
+echo "script/test: fresh interactive zsh in $DOTFILES_ROOT"
+
+if grep -q '^PROBE_DONE' "$tmp/out.clean"; then
+  ok "interactive zsh starts and reaches the prompt"
+else
+  bad "interactive zsh did not start (see $tmp/out and $tmp/err)"
+  cat "$tmp/err" 2>/dev/null | head -20
+  trap - EXIT
+  exit 1
+fi
+
+if [[ -s "$tmp/err" ]] && grep -q '[^[:space:]]' "$tmp/err"; then
+  bad "startup wrote to stderr:"
+  sed 's/^/      /' "$tmp/err" | head -20
+else
+  ok "startup wrote nothing to stderr"
+fi
+
+#------------------------------------------------------------------------------
+# 2. Environment promises
+#------------------------------------------------------------------------------
+EDITOR_VAL="$(get EDITOR)"
+[[ "$EDITOR_VAL" == "vim" ]] && ok "EDITOR is vim" || bad "EDITOR is '$EDITOR_VAL', expected vim"
+
+PROJECTS_VAL="$(get PROJECTS)"
+[[ "$PROJECTS_VAL" == "$HOME/src" ]] && ok "PROJECTS is ~/src" || bad "PROJECTS is '$PROJECTS_VAL', expected $HOME/src"
+
+PATH_VAL="$(get PATH)"
+case ":$PATH_VAL:" in
+  *":./bin:"*) bad "PATH contains ./bin" ;;
+  *) ok "PATH has no ./bin" ;;
+esac
+case "$PATH_VAL" in
+  *"/Users/holman/"*) bad "PATH contains /Users/holman/" ;;
+  *) ok "PATH has no /Users/holman/" ;;
+esac
+
+if [[ -d /Applications/Obsidian.app/Contents/MacOS ]]; then
+  case ":$PATH_VAL:" in
+    *":/Applications/Obsidian.app/Contents/MacOS:"*) ok "Obsidian is installed and on PATH" ;;
+    *) bad "Obsidian is installed but not on PATH" ;;
+  esac
+else
+  skp "Obsidian on PATH" "Obsidian not installed here"
+fi
+
+#------------------------------------------------------------------------------
+# 3. Topic functions and aliases that must exist
+#------------------------------------------------------------------------------
+for spec in tabcolor:function gwa:function cpush:function role:function reload!:alias gsp:alias; do
+  name="${spec%%:*}"; kind="${spec##*:}"
+  actual="$(grep -m1 "^WHENCE:$name=" "$tmp/out.clean" | cut -d= -f2- | awk '{print $NF}')"
+  [[ "$actual" == "$kind" ]] && ok "$name is a $kind" || bad "$name is '${actual:-missing}', expected $kind"
+done
+
+#------------------------------------------------------------------------------
+# 4. Repository promises
+#------------------------------------------------------------------------------
+if git -C "$DOTFILES_ROOT" grep -q -e '~/Code' -e '$HOME/Code' -- . ':!vendor' ':!script/test' 2>/dev/null; then
+  bad "repo still references ~/Code"
+else
+  ok "no ~/Code references in the repo"
+fi
+
+if git -C "$DOTFILES_ROOT" check-ignore -q bin/probe-file-that-does-not-exist; then
+  bad "bin/ is gitignored"
+else
+  ok "bin/ is not gitignored"
+fi
+
+syntax_bad=0
+while IFS= read -r f; do
+  zsh -n "$f" 2>"$tmp/syn" || { syntax_bad=1; printf '      %s: %s\n' "$f" "$(head -1 "$tmp/syn")"; }
+done < <(git -C "$DOTFILES_ROOT" ls-files -- '*.zsh' 'zsh/*.symlink' | grep -v '^vendor/')
+[[ $syntax_bad -eq 0 ]] && ok "every tracked zsh file parses" || bad "zsh syntax errors above"
+
+# Files that must not exist once a phase has removed them (added per phase)
+absent=()
+for f in "${absent[@]}"; do
+  [[ -e "$f" ]] && bad "$f should have been removed" || ok "$f is gone"
+done
+
+if grep -q -- '--dry-run' "$DOTFILES_ROOT/script/bootstrap" 2>/dev/null; then
+  if out="$("$DOTFILES_ROOT/script/bootstrap" --dry-run 2>&1)" && ! grep -qiE 'overwrite|remove|delete' <<<"$out"; then
+    ok "bootstrap --dry-run proposes no overwrites or deletions"
+  else
+    bad "bootstrap --dry-run would change an already configured machine"
+  fi
+else
+  skp "bootstrap --dry-run proposes nothing" "bootstrap has no --dry-run yet (phase 1)"
+fi
+
+#------------------------------------------------------------------------------
+echo
+if [[ $fail -eq 0 ]]; then
+  echo "PASS: $pass checks passed, $skip skipped"
+  exit 0
+else
+  echo "FAIL: $fail failed, $pass passed, $skip skipped"
+  exit 1
+fi

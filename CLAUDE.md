@@ -20,6 +20,7 @@ Each top-level directory is a "topic" (git, vim, system, cosmic, etc.). The topi
 - `git/aliases.zsh` — shell aliases (gs, gl, gpl, gp, gac, etc.)
 - `git/worktree.zsh` — worktree helpers (gwa, gwc, gwj, gwm, gwr, gwp)
 - `cosmic/aliases.zsh` — cosmic-clock project commands (cpush, cbuild, ctime, etc.)
+- `script/test` — starts a fresh interactive zsh in a pseudo-terminal and checks the promises below; `gsp` runs it after every pull
 - `bin/cheat` — colored cheatsheet script (run `cheat` to view)
 - `bin/sync-upstream` — rebase onto holman/master
 
@@ -36,11 +37,12 @@ Antigen is wrapped in `if [[ -z "$_ANTIGEN_LOADED" ]]` to prevent prompt breakag
 ## Important conventions
 
 - **Don't edit `~/.gitconfig` directly** — edit `git/gitconfig.symlink` and it gets symlinked
-- **`bin/` is gitignored** — use `git add -f bin/<script>` to add new scripts
+- **`bin/` is tracked normally** — the global gitignore (`git/gitignore.symlink`) no longer excludes it, so plain `git add` works
 - **SSH signing is active** — all commits are signed with Ed25519 key. The `allowedSignersFile` is at `~/.ssh/allowed_signers`
-- **direnv controls per-project env** — `.envrc` files set `TABCOLOR_PRESET` and `PATH`. Tab colors are applied by a `precmd` hook in `system/tabcolor.zsh` that reads the env var (since direnv runs in a subshell and can't emit escape codes directly)
+- **direnv controls per-project env** — `.envrc` files set `TABCOLOR_PRESET` and `PATH`. Tab colors are applied by a `precmd` hook in `system/tabcolor.zsh` that reads the env var (since direnv runs in a subshell and can't emit escape codes directly). The work machines' iTerm dynamic profiles under `iterm/` coexist with this for now; phase 4 of the normalisation plan replaces both with a single path map
 - **EDITOR is vim** — set in both `editors/env.zsh` and `zsh/zshrc.symlink`
 - **No `./bin` in PATH** — removed for security. Use explicit `./bin/something` for project-local scripts
+- **`gsp` is a verified pull** — after fetching and rebasing it runs `script/test` and rolls back to the previous head if the test fails, so a bad commit can never strand a machine. `GSP_NO_VERIFY=1` skips it in an emergency
 
 ## Tab color system
 
@@ -69,8 +71,12 @@ When Paul mentions setting up a new machine or syncing dotfiles to another devic
 
 ## Testing changes
 
-After modifying shell config:
-1. `source ~/.zshrc` (or `reload!`) — should produce no errors
-2. `echo $EDITOR` → should be `vim`
-3. `echo $PATH` — should not contain `./bin` or `/Users/holman/`
-4. Topic functions should be available: `type tabcolor`, `type gwa`, `type cpush`
+Run `script/test`. It starts a fresh interactive zsh under a pseudo-terminal and checks that:
+
+1. the shell reaches the prompt and writes nothing to stderr
+2. `EDITOR` is `vim` and `PROJECTS` is `~/src`
+3. `PATH` contains neither `./bin` nor `/Users/holman/`
+4. topic functions are defined: `tabcolor`, `gwa`, `cpush`, `role`, and the `reload!` and `gsp` aliases
+5. no references to the old `Code` projects directory remain, `bin/` is not gitignored, and every tracked zsh file parses
+
+`gsp` runs the same script after every pull. Add a check whenever a change makes a new promise.
