@@ -1,4 +1,9 @@
-# Gandalf CLI Prompt Integration
+# Gandalf CLI Prompt Integration (work machines only, by file tag)
+# Only active if gandalf-prompt is installed or ~/.gandalf exists
+if ! command -v gandalf-prompt >/dev/null 2>&1 && [[ ! -d ~/.gandalf ]]; then
+  return
+fi
+
 zmodload zsh/datetime 2>/dev/null
 
 gandalf_prompt_preexec() {

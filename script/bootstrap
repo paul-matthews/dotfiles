@@ -1,11 +1,48 @@
 #!/usr/bin/env bash
 #
-# bootstrap installs things.
+# bootstrap links the dotfiles into $HOME, records this machine's profile and
+# installs the repo's git hooks.
+#
+# It only ever adds things. A file or symlink that already exists is left
+# alone and reported; nothing is overwritten, backed up or removed. Re-run it
+# whenever you like; on a configured machine it changes nothing.
+#
+# Usage:
+#   script/bootstrap [--profile home|work] [--tag <name>]... [--dry-run]
+#
+#   --profile   record this machine's profile in ~/.dotfiles-profile
+#               (asked interactively if missing and no flag is given)
+#   --tag       record an extra machine tag in ~/.dotfiles-tags (repeatable),
+#               for hardware the loader cannot detect, e.g. --tag office
+#   --dry-run   report what would be done without touching anything
+#
+# Installing packages is script/install's job; script/setup runs both.
 
 cd "$(dirname "$0")/.."
 DOTFILES_ROOT=$(pwd -P)
 
 set -e
+
+PROFILE=""
+TAGS=()
+DRY_RUN=false
+
+usage () {
+  sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'
+}
+
+while [ $# -gt 0 ]
+do
+  case "$1" in
+    --profile)    PROFILE="$2"; shift 2 ;;
+    --profile=*)  PROFILE="${1#*=}"; shift ;;
+    --tag)        TAGS+=("$2"); shift 2 ;;
+    --tag=*)      TAGS+=("${1#*=}"); shift ;;
+    --dry-run|-n) DRY_RUN=true; shift ;;
+    -h|--help)    usage; exit 0 ;;
+    *)            echo "bootstrap: unknown option '$1'" >&2; usage >&2; exit 2 ;;
+  esac
+done
 
 echo ''
 
@@ -21,150 +58,215 @@ success () {
   printf "\r\033[2K  [ \033[00;32mOK\033[0m ] $1\n"
 }
 
+would () {
+  printf "\r\033[2K  [ \033[0;35m--\033[0m ] would: $1\n"
+}
+
 fail () {
   printf "\r\033[2K  [\033[0;31mFAIL\033[0m] $1\n"
   echo ''
-  exit
+  exit 1
 }
 
-setup_gitconfig () {
-  if ! [ -f git/gitconfig.local.symlink ]
+if [ -n "$PROFILE" ] && [ "$PROFILE" != "home" ] && [ "$PROFILE" != "work" ]
+then
+  fail "--profile must be home or work, not '$PROFILE'"
+fi
+
+LINKED=0
+ALREADY=0
+LEFT_ALONE=()
+
+# Create a directory, unless dry-running.
+ensure_dir () {
+  if [ -d "$1" ]
   then
-    info 'setup gitconfig'
-
-    git_credential='cache'
-    if [ "$(uname -s)" == "Darwin" ]
-    then
-      git_credential='osxkeychain'
-    fi
-
-    user ' - What is your github author name?'
-    read -e git_authorname
-    user ' - What is your github author email?'
-    read -e git_authoremail
-
-    sed -e "s/AUTHORNAME/$git_authorname/g" -e "s/AUTHOREMAIL/$git_authoremail/g" -e "s/GIT_CREDENTIAL_HELPER/$git_credential/g" git/gitconfig.local.symlink.example > git/gitconfig.local.symlink
-
-    success 'gitconfig'
+    return
+  fi
+  if [ "$DRY_RUN" = true ]
+  then
+    would "create directory $1"
+  else
+    mkdir -p "$1"
   fi
 }
 
-setup_iterm_layouts () {
-  if ! [ -f iterm/iterm_layouts.yaml.symlink ]
+# resolve <path>: the path with every directory symlink resolved (the final
+# component is kept as named), so ~/.dotfiles/x and ~/src/system/dotfiles/x compare equal.
+resolve () {
+  local dir base
+  dir="$(dirname "$1")"
+  base="$(basename "$1")"
+  if dir="$(cd "$dir" 2>/dev/null && pwd -P)"
   then
-    info 'setup iterm layouts config'
+    printf '%s/%s' "$dir" "$base"
+  else
+    printf '%s' "$1"
+  fi
+}
+
+# link_file <src> <dst>: symlink dst -> src, unless dst already exists.
+link_file () {
+  local src=$1 dst=$2
+
+  if [ -L "$dst" ] && [ "$(resolve "$(readlink "$dst")")" = "$(resolve "$src")" ]
+  then
+    ALREADY=$((ALREADY + 1))
+    return
+  fi
+
+  if [ -e "$dst" ] || [ -L "$dst" ]
+  then
+    user "exists, left alone: $dst (wanted -> $src)"
+    LEFT_ALONE+=("$dst")
+    return
+  fi
+
+  if [ "$DRY_RUN" = true ]
+  then
+    would "link $dst -> $src"
+  else
+    ensure_dir "$(dirname "$dst")"
+    ln -s "$src" "$dst"
+    success "linked $dst -> $src"
+    LINKED=$((LINKED + 1))
+  fi
+}
+
+setup_gitconfig () {
+  if [ -f git/gitconfig.local.symlink ]
+  then
+    return
+  fi
+
+  if [ "$DRY_RUN" = true ]
+  then
+    would "create git/gitconfig.local.symlink (asks for author name and email)"
+    return
+  fi
+
+  if [ ! -t 0 ]
+  then
+    info "no terminal to ask for git author details; copy git/gitconfig.local.symlink.example to git/gitconfig.local.symlink and fill it in"
+    return
+  fi
+
+  info 'setup gitconfig'
+
+  git_credential='cache'
+  if [ "$(uname -s)" = "Darwin" ]
+  then
+    git_credential='osxkeychain'
+  fi
+
+  user ' - What is your github author name?'
+  read -e git_authorname
+  user ' - What is your github author email?'
+  read -e git_authoremail
+
+  sed -e "s/AUTHORNAME/$git_authorname/g" -e "s/AUTHOREMAIL/$git_authoremail/g" -e "s/GIT_CREDENTIAL_HELPER/$git_credential/g" git/gitconfig.local.symlink.example > git/gitconfig.local.symlink
+
+  success 'gitconfig'
+}
+
+setup_profile () {
+  local file="$HOME/.dotfiles-profile"
+  local current=""
+  if [ -r "$file" ]
+  then
+    current="$(tr -d '[:space:]' < "$file")"
+  fi
+
+  if [ -n "$PROFILE" ]
+  then
+    if [ "$current" = "$PROFILE" ]
+    then
+      success "profile is $PROFILE"
+    elif [ "$DRY_RUN" = true ]
+    then
+      would "write profile '$PROFILE' to $file${current:+ (currently '$current')}"
+    else
+      printf '%s\n' "$PROFILE" > "$file"
+      success "profile set to $PROFILE${current:+ (was '$current')}"
+    fi
+  elif [ -n "$current" ]
+  then
+    success "profile is $current"
+  elif [ "$DRY_RUN" = true ]
+  then
+    would "ask whether this machine is home or work and write $file"
+  elif [ ! -t 0 ]
+  then
+    fail "no profile recorded and no terminal to ask; run script/bootstrap --profile home|work"
+  else
+    local answer=""
+    while [ "$answer" != "home" ] && [ "$answer" != "work" ]
+    do
+      user ' - Is this a home or work machine? [home/work]'
+      read -e answer
+    done
+    printf '%s\n' "$answer" > "$file"
+    success "profile set to $answer"
+  fi
+
+  local tagfile="$HOME/.dotfiles-tags"
+  local tag
+  for tag in "${TAGS[@]}"
+  do
+    if [ -r "$tagfile" ] && grep -qxF "$tag" "$tagfile"
+    then
+      success "tag '$tag' already recorded"
+    elif [ "$DRY_RUN" = true ]
+    then
+      would "record tag '$tag' in $tagfile"
+    else
+      printf '%s\n' "$tag" >> "$tagfile"
+      success "tag '$tag' recorded"
+    fi
+  done
+}
+
+setup_git_hooks () {
+  local hooks_dir
+  hooks_dir="$(git rev-parse --git-path hooks)"
+  case "$hooks_dir" in
+    /*) ;;
+    *) hooks_dir="$DOTFILES_ROOT/$hooks_dir" ;;
+  esac
+  link_file "$DOTFILES_ROOT/script/pre-commit" "$hooks_dir/pre-commit"
+}
+
+setup_iterm_layouts () {
+  if [ "$(uname -s)" != "Darwin" ] || [ -f iterm/iterm_layouts.yaml.symlink ]
+  then
+    return
+  fi
+  if [ "$DRY_RUN" = true ]
+  then
+    would "create iterm/iterm_layouts.yaml.symlink from the example"
+  else
     cp iterm/iterm_layouts.yaml.example iterm/iterm_layouts.yaml.symlink
     success 'iterm layouts config created (edit iterm/iterm_layouts.yaml.symlink to customize)'
   fi
 }
 
 setup_iterm_dynamic_profiles () {
-  if [ "$(uname -s)" == "Darwin" ]
+  if [ "$(uname -s)" = "Darwin" ]
   then
-    info 'setup iterm dynamic profiles and shell integration'
-    mkdir -p "$HOME/Library/Application Support/iTerm2/DynamicProfiles"
     link_file "$DOTFILES_ROOT/iterm/DynamicProfiles/projects.json" "$HOME/Library/Application Support/iTerm2/DynamicProfiles/projects.json"
     link_file "$DOTFILES_ROOT/iterm/iterm2_shell_integration.zsh" "$HOME/.iterm2_shell_integration.zsh"
-    success 'iterm dynamic profiles and shell integration'
   fi
 }
 
 setup_glow () {
-  info 'setup glow config'
-  mkdir -p "$HOME/.config/glow"
   link_file "$DOTFILES_ROOT/glow/glow.yml" "$HOME/.config/glow/glow.yml"
-
-  if [ "$(uname -s)" == "Darwin" ]
+  if [ "$(uname -s)" = "Darwin" ]
   then
-    mkdir -p "$HOME/Library/Preferences/glow"
     link_file "$DOTFILES_ROOT/glow/glow.yml" "$HOME/Library/Preferences/glow/glow.yml"
-  fi
-  success 'glow config'
-}
-
-
-
-
-link_file () {
-  local src=$1 dst=$2
-
-  local overwrite= backup= skip=
-  local action=
-
-  if [ -f "$dst" -o -d "$dst" -o -L "$dst" ]
-  then
-
-    if [ "$overwrite_all" == "false" ] && [ "$backup_all" == "false" ] && [ "$skip_all" == "false" ]
-    then
-
-      local currentSrc="$(readlink $dst)"
-
-      if [ "$currentSrc" == "$src" ]
-      then
-
-        skip=true;
-
-      else
-
-        user "File already exists: $dst ($(basename "$src")), what do you want to do?\n\
-        [s]kip, [S]kip all, [o]verwrite, [O]verwrite all, [b]ackup, [B]ackup all?"
-        read -n 1 action
-
-        case "$action" in
-          o )
-            overwrite=true;;
-          O )
-            overwrite_all=true;;
-          b )
-            backup=true;;
-          B )
-            backup_all=true;;
-          s )
-            skip=true;;
-          S )
-            skip_all=true;;
-          * )
-            ;;
-        esac
-
-      fi
-
-    fi
-
-    overwrite=${overwrite:-$overwrite_all}
-    backup=${backup:-$backup_all}
-    skip=${skip:-$skip_all}
-
-    if [ "$overwrite" == "true" ]
-    then
-      rm -rf "$dst"
-      success "removed $dst"
-    fi
-
-    if [ "$backup" == "true" ]
-    then
-      mv "$dst" "${dst}.backup"
-      success "moved $dst to ${dst}.backup"
-    fi
-
-    if [ "$skip" == "true" ]
-    then
-      success "skipped $src"
-    fi
-  fi
-
-  if [ "$skip" != "true" ]  # "false" or empty
-  then
-    ln -s "$1" "$2"
-    success "linked $1 to $2"
   fi
 }
 
 install_dotfiles () {
-  info 'installing dotfiles'
-
-  local overwrite_all=false backup_all=false skip_all=false
-
   for src in $(find -H "$DOTFILES_ROOT" -maxdepth 2 -name '*.symlink' -not -path '*.git*')
   do
     dst="$HOME/.$(basename "${src%.*}")"
@@ -173,12 +275,6 @@ install_dotfiles () {
 }
 
 install_configlinks () {
-  info 'installing configlinks'
-
-  local overwrite_all=false backup_all=false skip_all=false
-
-  mkdir -p "$HOME/.config"
-
   for src in $(find -H "$DOTFILES_ROOT" -maxdepth 2 -name '*.configlink' -not -path '*.git*')
   do
     dst="$HOME/.config/$(basename "${src%.*}")"
@@ -186,24 +282,33 @@ install_configlinks () {
   done
 }
 
+if [ "$DRY_RUN" = true ]
+then
+  info "dry run: nothing will be changed"
+fi
+
+setup_profile
 setup_gitconfig
+setup_git_hooks
 setup_iterm_layouts
 setup_iterm_dynamic_profiles
 setup_glow
 install_dotfiles
 install_configlinks
 
-# If we're on a Mac, let's install and setup homebrew.
-if [ "$(uname -s)" == "Darwin" ]
-then
-  info "installing dependencies"
-  if source bin/dot | while read -r data; do info "$data"; done
-  then
-    success "dependencies installed"
-  else
-    fail "error installing dependencies"
-  fi
-fi
-
 echo ''
-echo '  All installed!'
+if [ "$DRY_RUN" = true ]
+then
+  info "dry run finished: $ALREADY link(s) already in place, ${#LEFT_ALONE[@]} existing file(s) would be left alone"
+else
+  success "done: $LINKED linked, $ALREADY already in place, ${#LEFT_ALONE[@]} left alone"
+fi
+if [ ${#LEFT_ALONE[@]} -gt 0 ]
+then
+  info "left alone (move or delete them and re-run to link):"
+  for f in "${LEFT_ALONE[@]}"
+  do
+    echo "         $f"
+  done
+fi
+echo ''

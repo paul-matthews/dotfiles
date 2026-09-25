@@ -1,0 +1,65 @@
+#!/usr/bin/env bash
+#
+# pre-commit hook for the dotfiles repo, installed by script/bootstrap as
+# .git/hooks/pre-commit. Refuses a commit that would leak:
+#
+#   1. private key material (age or SSH/PEM) anywhere in the staged changes
+#   2. a secrets file that is not SOPS-encrypted
+#   3. a key file (*.age, keys.txt)
+#   4. any value from this machine's decrypted ~/.localrc.secrets, so a real
+#      path, hostname or work-internal name kept in secrets can never be
+#      pasted into a plaintext file. The list comes from the machine's own
+#      secrets and is never committed itself.
+#
+# Never bypass this with --no-verify; fix the commit instead.
+
+set -u
+
+fail=0
+block() { printf 'pre-commit: %s\n' "$1" >&2; fail=1; }
+
+staged_files="$(git diff --cached --name-only --diff-filter=ACMR)"
+staged_added="$(git diff --cached -U0 --no-color | grep -E '^\+' | grep -vE '^\+\+\+ ')"
+
+# 1. Private key material
+# Real key shapes only, so a script that merely names the pattern is not caught.
+if grep -qE 'AGE-SECRET-KEY-1[0-9A-Z]{20,}|-----BEGIN [A-Z ]*PRIVATE KEY-----' <<<"$staged_added"; then
+  block "staged content contains a private key"
+fi
+
+# 2. Secrets files must be SOPS-encrypted (an .example file is exempt)
+while IFS= read -r f; do
+  [[ -z "$f" ]] && continue
+  case "$f" in
+    *.example) continue ;;
+    *secrets*.yaml|*secrets*.yml|*secrets*.json|*.sops.*)
+      if ! git show ":$f" | grep -q 'ENC\['; then
+        block "$f is a secrets file but is not SOPS-encrypted"
+      fi ;;
+  esac
+done <<<"$staged_files"
+
+# 3. Key files
+while IFS= read -r f; do
+  [[ -z "$f" ]] && continue
+  case "$f" in
+    *.age|keys.txt|*/keys.txt) block "refusing to commit key file $f" ;;
+  esac
+done <<<"$staged_files"
+
+# 4. Values from this machine's decrypted secrets
+if [[ -r "$HOME/.localrc.secrets" ]]; then
+  while IFS= read -r val; do
+    [[ ${#val} -lt 6 ]] && continue
+    if grep -qF -- "$val" <<<"$staged_added"; then
+      block "staged content contains a value from ~/.localrc.secrets"
+      break
+    fi
+  done < <(sed -nE "s/^(export |alias )?[A-Za-z_][A-Za-z0-9_]*=['\"]?([^'\"]+)['\"]?[[:space:]]*$/\2/p" "$HOME/.localrc.secrets")
+fi
+
+if [[ $fail -ne 0 ]]; then
+  printf 'pre-commit: commit blocked. Do not use --no-verify; fix the commit instead.\n' >&2
+  exit 1
+fi
+exit 0

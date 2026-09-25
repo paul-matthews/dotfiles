@@ -28,47 +28,66 @@ tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 
 #------------------------------------------------------------------------------
-# 1. Start a fresh interactive zsh under a pty, stderr captured separately
+# Probe: start a fresh interactive zsh under a pty, stderr captured separately
 #------------------------------------------------------------------------------
 probe='
 print
 print -r -- "EDITOR=$EDITOR"
 print -r -- "PROJECTS=$PROJECTS"
 print -r -- "PATH=$PATH"
-for f in tabcolor gwa cpush role reload! gsp; do
+print -r -- "DOTFILES_PROFILE=$DOTFILES_PROFILE"
+print -r -- "DOTFILES_TAGS=$DOTFILES_TAGS"
+for f in tabcolor gwa cpush role reload! gsp gandalf_prompt_precmd; do
   print -r -- "WHENCE:$f=$(whence -w $f 2>/dev/null)"
 done
 print -r -- "PROBE_DONE"
 '
-inner="zsh -ic \"\$0\" 2>\"\$1\""
 
-if script --version >/dev/null 2>&1; then
-  # util-linux script (Linux)
-  script -qec "zsh -c '$inner' \"\$probe\" \"$tmp/err\"" /dev/null >"$tmp/out" 2>/dev/null \
-    < /dev/null
-else
-  # BSD script (macOS)
-  script -q /dev/null zsh -c "$inner" "$probe" "$tmp/err" >"$tmp/out" 2>/dev/null </dev/null
-fi
-# strip CRs, OSC escape sequences (iTerm shell integration) and other control chars
-perl -pe 's/\r//g; s/\e\][^\a\e]*(\a|\e\\)//g; s/\e\[[0-9;?]*[A-Za-z]//g; s/[\x00-\x08\x0b-\x1f]//g' <"$tmp/out" >"$tmp/out.clean"
+# run_probe <name> [VAR=value ...]: writes $tmp/<name>.out (cleaned) and $tmp/<name>.err
+run_probe() {
+  local name="$1"; shift
+  local inner="zsh -ic \"\$0\" 2>\"\$1\""
+  if script --version >/dev/null 2>&1; then
+    # util-linux script (Linux)
+    env "$@" script -qec "zsh -c '$inner' \"\$probe\" \"$tmp/$name.err\"" /dev/null \
+      >"$tmp/$name.raw" 2>/dev/null </dev/null
+  else
+    # BSD script (macOS)
+    env "$@" script -q /dev/null zsh -c "$inner" "$probe" "$tmp/$name.err" \
+      >"$tmp/$name.raw" 2>/dev/null </dev/null
+  fi
+  # strip CRs, OSC escape sequences (iTerm shell integration) and control chars
+  perl -pe 's/\r//g; s/\e\][^\a\e]*(\a|\e\\)//g; s/\e\[[0-9;?]*[A-Za-z]//g; s/[\x00-\x08\x0b-\x1f]//g' \
+    <"$tmp/$name.raw" >"$tmp/$name.out"
+}
 
-get() { grep -m1 "^$1=" "$tmp/out.clean" | cut -d= -f2-; }
+get()    { grep -m1 "^$2=" "$tmp/$1.out" | cut -d= -f2-; }
+whence_kind() {  # function | alias | command | ... ; empty when not defined
+  local k; k="$(grep -m1 "^WHENCE:$2=" "$tmp/$1.out" | cut -d= -f2- | awk '{print $NF}')"
+  [[ "$k" == "none" ]] || printf '%s' "$k"
+}
+
+export probe
+run_probe main
+run_probe safe DOTFILES_SAFE=1
 
 echo "script/test: fresh interactive zsh in $DOTFILES_ROOT"
 
-if grep -q '^PROBE_DONE' "$tmp/out.clean"; then
+#------------------------------------------------------------------------------
+# 1. Startup
+#------------------------------------------------------------------------------
+if grep -q '^PROBE_DONE' "$tmp/main.out"; then
   ok "interactive zsh starts and reaches the prompt"
 else
-  bad "interactive zsh did not start (see $tmp/out and $tmp/err)"
-  cat "$tmp/err" 2>/dev/null | head -20
+  bad "interactive zsh did not start"
+  head -20 "$tmp/main.err" 2>/dev/null | sed 's/^/      /'
   trap - EXIT
   exit 1
 fi
 
-if [[ -s "$tmp/err" ]] && grep -q '[^[:space:]]' "$tmp/err"; then
+if grep -q '[^[:space:]]' "$tmp/main.err" 2>/dev/null; then
   bad "startup wrote to stderr:"
-  sed 's/^/      /' "$tmp/err" | head -20
+  sed 's/^/      /' "$tmp/main.err" | head -20
 else
   ok "startup wrote nothing to stderr"
 fi
@@ -76,13 +95,13 @@ fi
 #------------------------------------------------------------------------------
 # 2. Environment promises
 #------------------------------------------------------------------------------
-EDITOR_VAL="$(get EDITOR)"
-[[ "$EDITOR_VAL" == "vim" ]] && ok "EDITOR is vim" || bad "EDITOR is '$EDITOR_VAL', expected vim"
+v="$(get main EDITOR)"
+[[ "$v" == "vim" ]] && ok "EDITOR is vim" || bad "EDITOR is '$v', expected vim"
 
-PROJECTS_VAL="$(get PROJECTS)"
-[[ "$PROJECTS_VAL" == "$HOME/src" ]] && ok "PROJECTS is ~/src" || bad "PROJECTS is '$PROJECTS_VAL', expected $HOME/src"
+v="$(get main PROJECTS)"
+[[ "$v" == "$HOME/src" ]] && ok "PROJECTS is ~/src" || bad "PROJECTS is '$v', expected $HOME/src"
 
-PATH_VAL="$(get PATH)"
+PATH_VAL="$(get main PATH)"
 case ":$PATH_VAL:" in
   *":./bin:"*) bad "PATH contains ./bin" ;;
   *) ok "PATH has no ./bin" ;;
@@ -102,16 +121,49 @@ else
 fi
 
 #------------------------------------------------------------------------------
-# 3. Topic functions and aliases that must exist
+# 3. Machine profile and tags
+#------------------------------------------------------------------------------
+expected_profile="home"
+[[ -r "$HOME/.dotfiles-profile" ]] && expected_profile="$(tr -d '[:space:]' < "$HOME/.dotfiles-profile")"
+v="$(get main DOTFILES_PROFILE)"
+[[ "$v" == "$expected_profile" ]] && ok "DOTFILES_PROFILE is $expected_profile" || bad "DOTFILES_PROFILE is '$v', expected $expected_profile"
+
+os_tag="$(uname -s | tr '[:upper:]' '[:lower:]')"
+tags=" $(get main DOTFILES_TAGS) "
+if [[ "$tags" == *" $expected_profile "* && "$tags" == *" $os_tag "* ]]; then
+  ok "DOTFILES_TAGS contains '$expected_profile' and '$os_tag' (${tags# })"
+else
+  bad "DOTFILES_TAGS is '${tags# }', expected to contain '$expected_profile' and '$os_tag'"
+fi
+
+if [[ "$expected_profile" == "home" ]]; then
+  v="$(whence_kind main gandalf_prompt_precmd)"
+  [[ -z "$v" ]] && ok "work-only gandalf hook is not loaded on a home profile" || bad "gandalf hook loaded on a home profile"
+else
+  skp "gandalf hook absent" "work profile"
+fi
+
+#------------------------------------------------------------------------------
+# 4. Topic functions and aliases that must exist
 #------------------------------------------------------------------------------
 for spec in tabcolor:function gwa:function cpush:function role:function reload!:alias gsp:alias; do
   name="${spec%%:*}"; kind="${spec##*:}"
-  actual="$(grep -m1 "^WHENCE:$name=" "$tmp/out.clean" | cut -d= -f2- | awk '{print $NF}')"
+  actual="$(whence_kind main "$name")"
   [[ "$actual" == "$kind" ]] && ok "$name is a $kind" || bad "$name is '${actual:-missing}', expected $kind"
 done
 
 #------------------------------------------------------------------------------
-# 4. Repository promises
+# 5. Safe mode: DOTFILES_SAFE=1 gives a usable shell with no topic files
+#------------------------------------------------------------------------------
+if grep -q '^PROBE_DONE' "$tmp/safe.out"; then
+  v="$(whence_kind safe tabcolor)"
+  [[ -z "$v" ]] && ok "DOTFILES_SAFE=1 starts a shell with no topic files loaded" || bad "DOTFILES_SAFE=1 still loaded topic files"
+else
+  bad "DOTFILES_SAFE=1 shell did not start"
+fi
+
+#------------------------------------------------------------------------------
+# 6. Repository promises
 #------------------------------------------------------------------------------
 if git -C "$DOTFILES_ROOT" grep -q -e '~/Code' -e '$HOME/Code' -- . ':!vendor' ':!script/test' 2>/dev/null; then
   bad "repo still references ~/Code"
@@ -132,20 +184,42 @@ done < <(git -C "$DOTFILES_ROOT" ls-files -- '*.zsh' 'zsh/*.symlink' | grep -v '
 [[ $syntax_bad -eq 0 ]] && ok "every tracked zsh file parses" || bad "zsh syntax errors above"
 
 # Files that must not exist once a phase has removed them (added per phase)
-absent=()
+absent=(zsh/gandalf.zsh)
 for f in "${absent[@]}"; do
-  [[ -e "$f" ]] && bad "$f should have been removed" || ok "$f is gone"
+  [[ -e "$DOTFILES_ROOT/$f" ]] && bad "$f should have been removed" || ok "$f is gone"
 done
 
-if grep -q -- '--dry-run' "$DOTFILES_ROOT/script/bootstrap" 2>/dev/null; then
-  if out="$("$DOTFILES_ROOT/script/bootstrap" --dry-run 2>&1)" && ! grep -qiE 'overwrite|remove|delete' <<<"$out"; then
-    ok "bootstrap --dry-run proposes no overwrites or deletions"
+#------------------------------------------------------------------------------
+# 7. Bootstrap is idempotent on a configured machine
+#------------------------------------------------------------------------------
+if out="$("$DOTFILES_ROOT/script/bootstrap" --dry-run 2>&1)"; then
+  if grep -q 'would:' <<<"$out"; then
+    bad "bootstrap --dry-run still has something to do:"
+    grep 'would:' <<<"$out" | sed 's/^/      /'
   else
-    bad "bootstrap --dry-run would change an already configured machine"
+    ok "bootstrap --dry-run proposes nothing"
   fi
 else
-  skp "bootstrap --dry-run proposes nothing" "bootstrap has no --dry-run yet (phase 1)"
+  bad "bootstrap --dry-run failed"
 fi
+
+#------------------------------------------------------------------------------
+# 8. Pre-commit hook: installed here, and blocks a private key
+#------------------------------------------------------------------------------
+hooks_dir="$(git -C "$DOTFILES_ROOT" rev-parse --git-path hooks)"
+[[ "$hooks_dir" != /* ]] && hooks_dir="$DOTFILES_ROOT/$hooks_dir"
+if [[ -L "$hooks_dir/pre-commit" && "$(readlink "$hooks_dir/pre-commit")" == "$DOTFILES_ROOT/script/pre-commit" ]]; then
+  ok "pre-commit hook is installed"
+else
+  bad "pre-commit hook is not installed (run script/bootstrap)"
+fi
+
+(
+  cd "$tmp" && git init -q hooktest && cd hooktest \
+    && ln -s "$DOTFILES_ROOT/script/pre-commit" .git/hooks/pre-commit \
+    && printf 'AGE-SECRET-KEY-1%s\n' "$(printf 'Q%.0s' $(seq 1 40))" > leak.txt && git add leak.txt \
+    && git -c user.email=t@t -c user.name=t -c commit.gpgsign=false commit -q -m leak >/dev/null 2>&1
+) && bad "pre-commit hook let a private key through" || ok "pre-commit hook blocks a commit containing a private key"
 
 #------------------------------------------------------------------------------
 echo

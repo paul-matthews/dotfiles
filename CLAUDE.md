@@ -5,11 +5,17 @@ Paul's dotfiles, forked from [holman/dotfiles](https://github.com/holman/dotfile
 ## Architecture
 
 ### Topic structure
-Each top-level directory is a "topic" (git, vim, system, cosmic, etc.). The topic loader in `zsh/zshrc.symlink` auto-sources all `*.zsh` files:
+Each top-level directory is a "topic" (git, vim, system, cosmic, etc.). The topic loader in `zsh/loader.zsh` (sourced by `zsh/zshrc.symlink`, with a plain-glob fallback if it fails) auto-sources `*.zsh` files:
 
 1. `*/path.zsh` — loaded first (PATH modifications)
-2. `**/*.zsh` — loaded next, skipping `path.zsh`, `completion.zsh`, `zshrc.symlink`, and `antigen.zsh`
-3. `*.symlink` — symlinked to `~/.<name>` by `script/bootstrap`
+2. `**/*.zsh` — loaded next, skipping `path.zsh`, `completion.zsh`, `antigen.zsh` and `loader.zsh`
+3. `*/completion.zsh` — loaded last
+4. `*.symlink` — symlinked to `~/.<name>` by `script/bootstrap`; `*.configlink` to `~/.config/<name>`
+
+### Machine profile and tags
+A file is sourced only if every tag in its name is one of this machine's tags. `DOTFILES_TAGS` is built once per shell from: the profile (`home` or `work`, read from `~/.dotfiles-profile`, written by `script/bootstrap --profile X`), the OS from `uname` (`darwin` or `linux`), `pi` when `/proc/device-tree/model` names a Raspberry Pi, and any extra tags in `~/.dotfiles-tags` (`script/bootstrap --tag X`). So `foo.zsh` loads everywhere, `foo.work.zsh` on work machines, `foo.work.linux.zsh` on the work Linux box, `foo.pi.zsh` on Pis. Tags are stripped before a file is classified, so `path.work.zsh` still loads first. Guard by existence for tools, by tag for machines.
+
+`DOTFILES_SAFE=1 zsh` starts a shell with no topic files, for repairing a broken setup.
 
 ### Key files
 - `zsh/zshrc.symlink` → `~/.zshrc` — main shell config, antigen plugins, topic loader, tool integrations (fzf, zoxide, direnv)
@@ -20,6 +26,9 @@ Each top-level directory is a "topic" (git, vim, system, cosmic, etc.). The topi
 - `git/aliases.zsh` — shell aliases (gs, gl, gpl, gp, gac, etc.)
 - `git/worktree.zsh` — worktree helpers (gwa, gwc, gwj, gwm, gwr, gwp)
 - `cosmic/aliases.zsh` — cosmic-clock project commands (cpush, cbuild, ctime, etc.)
+- `zsh/loader.zsh` — machine tags and the tag-aware topic loader
+- `script/bootstrap` — links symlinks, records the profile, installs the pre-commit hook; additive and idempotent, `--dry-run` shows what it would do
+- `script/pre-commit` — installed as the repo's git hook; blocks private keys, unencrypted secrets files and values from `~/.localrc.secrets`
 - `script/test` — starts a fresh interactive zsh in a pseudo-terminal and checks the promises below; `gsp` runs it after every pull
 - `bin/cheat` — colored cheatsheet script (run `cheat` to view)
 - `bin/sync-upstream` — rebase onto holman/master
@@ -76,7 +85,9 @@ Run `script/test`. It starts a fresh interactive zsh under a pseudo-terminal and
 1. the shell reaches the prompt and writes nothing to stderr
 2. `EDITOR` is `vim` and `PROJECTS` is `~/src`
 3. `PATH` contains neither `./bin` nor `/Users/holman/`
-4. topic functions are defined: `tabcolor`, `gwa`, `cpush`, `role`, and the `reload!` and `gsp` aliases
-5. no references to the old `Code` projects directory remain, `bin/` is not gitignored, and every tracked zsh file parses
+4. `DOTFILES_PROFILE` matches `~/.dotfiles-profile` and `DOTFILES_TAGS` carries the profile and OS; work-only files stay unloaded on a home profile
+5. topic functions are defined: `tabcolor`, `gwa`, `cpush`, `role`, and the `reload!` and `gsp` aliases; `DOTFILES_SAFE=1` gives a shell with none of them
+6. no references to the old `Code` projects directory remain, `bin/` is not gitignored, every tracked zsh file parses, and files removed by a phase stay gone
+7. `script/bootstrap --dry-run` has nothing left to do, and the pre-commit hook is installed and blocks a private key
 
 `gsp` runs the same script after every pull. Add a check whenever a change makes a new promise.

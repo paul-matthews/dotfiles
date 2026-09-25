@@ -54,31 +54,19 @@ fi
 # Dotfiles Topic Loader
 #==============================================================================
 
-# all of our zsh files
-typeset -U config_files
-config_files=($ZSH/**/*.zsh)
-
-# load the path files
-for file in ${(M)config_files:#*/path.zsh}
-do
-  source $file
-done
-
-# load everything but the path and completion files
-for file in ${${config_files:#*/path.zsh}:#*/completion.zsh}
-do
-  [[ "$file" == */zshrc.symlink ]] && continue
-  [[ "$file" == */antigen.zsh ]] && continue
-  source $file
-done
-
-# load every completion after everything else loads
-for file in ${(M)config_files:#*/completion.zsh}
-do
-  source $file
-done
-
-unset config_files
+# Machine tags (DOTFILES_PROFILE, DOTFILES_TAGS) and the tag-aware topic loader
+# live in zsh/loader.zsh. If that file fails to load, fall back to the plain
+# glob loader so a shell always comes up. DOTFILES_SAFE=1 skips topic files.
+if ! source "$ZSH/zsh/loader.zsh" 2>/dev/null; then
+  print -u2 "dotfiles: zsh/loader.zsh failed to load, using the plain loader (check: zsh -n $ZSH/zsh/loader.zsh)"
+  if [[ -z "${DOTFILES_SAFE:-}" ]]; then
+    for file in $ZSH/**/*.zsh; do
+      [[ "$file" == */antigen.zsh || "$file" == */zsh/loader.zsh ]] && continue
+      source "$file"
+    done
+    unset file
+  fi
+fi
 
 #==============================================================================
 # Configuration
