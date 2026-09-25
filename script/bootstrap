@@ -283,11 +283,49 @@ setup_iterm_layouts () {
   fi
 }
 
-setup_iterm_dynamic_profiles () {
-  if [ "$(uname -s)" = "Darwin" ]
+setup_iterm () {
+  if [ "$(uname -s)" != "Darwin" ]
   then
-    link_file "$DOTFILES_ROOT/iterm/DynamicProfiles/projects.json" "$HOME/Library/Application Support/iTerm2/DynamicProfiles/projects.json"
-    link_file "$DOTFILES_ROOT/iterm/iterm2_shell_integration.zsh" "$HOME/.iterm2_shell_integration.zsh"
+    return
+  fi
+  link_file "$DOTFILES_ROOT/iterm/iterm2_shell_integration.zsh" "$HOME/.iterm2_shell_integration.zsh"
+
+  # One dynamic profile, "Dotfiles Default", carries the Nerd Font and inherits
+  # everything else from Default; making it the default profile removes the
+  # last manual iTerm step. iTerm picks the file up within seconds; the default
+  # profile change applies to new windows after iTerm restarts.
+  link_file "$DOTFILES_ROOT/iterm/DynamicProfiles/dotfiles-default.json" "$HOME/Library/Application Support/iTerm2/DynamicProfiles/dotfiles-default.json"
+  local guid current
+  guid="$(sed -nE 's/.*"Guid": *"([^"]+)".*/\1/p' "$DOTFILES_ROOT/iterm/DynamicProfiles/dotfiles-default.json" | head -1)"
+  current="$(defaults read com.googlecode.iterm2 "Default Bookmark Guid" 2>/dev/null || true)"
+  if [ "$current" = "$guid" ]
+  then
+    return
+  fi
+  if [ "$DRY_RUN" = true ]
+  then
+    would "make 'Dotfiles Default' the default iTerm profile (Default Bookmark Guid)"
+  else
+    defaults write com.googlecode.iterm2 "Default Bookmark Guid" -string "$guid"
+    success "iTerm default profile set to 'Dotfiles Default' (restart iTerm to apply)"
+  fi
+}
+
+setup_claude () {
+  # Claude Code wiring, home machines only: hooks and the status line script
+  local profile=""
+  [ -r "$HOME/.dotfiles-profile" ] && profile="$(tr -d '[:space:]' < "$HOME/.dotfiles-profile")"
+  [ -n "$PROFILE" ] && profile="$PROFILE"
+  if [ "${profile:-home}" != "home" ]
+  then
+    return
+  fi
+  link_file "$DOTFILES_ROOT/claude/statusline-command.sh" "$HOME/.claude/statusline-command.sh"
+  if [ "$DRY_RUN" = true ]
+  then
+    bin/claude-hooks check >/dev/null 2>&1 || would "write the hooks from claude/hooks.json into ~/.claude/settings.json"
+  else
+    bin/claude-hooks install
   fi
 }
 
@@ -325,7 +363,8 @@ setup_gitconfig
 setup_git_hooks
 setup_secrets
 setup_iterm_layouts
-setup_iterm_dynamic_profiles
+setup_iterm
+setup_claude
 setup_glow
 install_dotfiles
 install_configlinks

@@ -56,13 +56,13 @@ Antigen is wrapped in `if [[ -z "$_ANTIGEN_LOADED" ]]` to prevent prompt breakag
 - **Secrets live in `secrets.sops.yaml`**, encrypted with age to one key per machine (recipients in `.sops.yaml`). `secrets-pull` decrypts to `~/.localrc.secrets` (mode 600), which zshrc sources; `secrets-push` re-encrypts and refuses if another machine pushed since your last pull, because encrypted files cannot be merged. Bootstrap generates a machine's key at `~/.config/sops/age/keys.txt` and prints the public key; a machine that can decrypt adds it with `secrets add-recipient`. Anything not for a public repo (tokens, work-internal names, real paths) goes here, as exports or aliases
 - **`gsp` is a verified pull** — after fetching and rebasing it runs `script/test` and rolls back to the previous head if the test fails, so a bad commit can never strand a machine. `GSP_NO_VERIFY=1` skips it in an emergency
 
-## Tab color system
+## Tab colour system
 
-Colors rotate per-tab using shell PID (`$$`). Each project preset has an 8-color palette defined in `_TABCOLOR_PALETTES` in `system/tabcolor.zsh`. Projects set `export TABCOLOR_PRESET=<name>` in their `.envrc`.
+One engine, `system/tabcolor.zsh`, on every machine. A precmd hook asks `_tabcolor_preset_for "$PWD"`, which returns `TABCOLOR_PRESET` if a repo's `.envrc` exported one, else the first row of `system/tabcolor-presets.sh` whose glob matches the directory (rows tagged `home` or `work` only apply on that profile). That file is the single source of truth: preset, 3-character short name, emoji, display name, tag, globs, and an 8-colour palette; per-tab rotation picks a palette entry by shell PID. Tab title and badge read `<emoji> <SHORT>`, plus ` / <role>` after `role <name>` (`iterm/role.zsh`); bare `role` clears it.
 
-Available presets: `claude`, `cosmic`, `dotfiles`, `android`, `danger`, `reset`
+AI tools get the darkened project colour through shell wrappers in `system/ai-tabs.zsh` (`claude`) and `system/ai-tabs.work.zsh` (`jc`), which pass `"$@"` through untouched and hand the tab back to the engine on exit. `iterm/ssh.zsh` colours SSH sessions amber and hands back the same way. Manual: `tabcolor <preset>`, `tabcolor danger`, `tabcolor reset`, `tabcolor-preview <preset>`.
 
-Claude CLI sessions use `~/.claude/session-tab-color.sh` (SessionStart hook) with a separate rotation using `PPID`.
+iTerm keeps exactly one dynamic profile, `iterm/DynamicProfiles/dotfiles-default.json`, carrying the Nerd Font; bootstrap links it and makes it the default profile. Automatic profile switching is not used. `claude/hooks.json` is the repo copy of the Claude Code hooks (installed by `bin/claude-hooks`, home profile only) and `claude/statusline-command.sh` the status line script.
 
 ## Git configuration
 

@@ -166,21 +166,9 @@ export NVM_DIR="$HOME/.nvm"
 [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
 
 #==============================================================================
-# iTerm2 Shell Integration & Dynamic Profiles (Automatic Profile Switching)
+# iTerm2 Shell Integration
 #==============================================================================
 
-if [[ "$TERM_PROGRAM" == "iTerm.app" ]]; then
-  # Auto-link dynamic profiles on this machine if not present
-  if [[ ! -e "$HOME/Library/Application Support/iTerm2/DynamicProfiles/projects.json" ]]; then
-    mkdir -p "$HOME/Library/Application Support/iTerm2/DynamicProfiles" 2>/dev/null
-    ln -sf "$ZSH/iterm/DynamicProfiles/projects.json" "$HOME/Library/Application Support/iTerm2/DynamicProfiles/projects.json" 2>/dev/null
-  fi
-
-  # Source iTerm2 shell integration from dotfiles repo
-  if [[ -f "$ZSH/iterm/iterm2_shell_integration.zsh" ]]; then
-    source "$ZSH/iterm/iterm2_shell_integration.zsh"
-  elif [[ -f "${HOME}/.iterm2_shell_integration.zsh" ]]; then
-    source "${HOME}/.iterm2_shell_integration.zsh"
-  fi
+if [[ "$TERM_PROGRAM" == "iTerm.app" && -f "$ZSH/iterm/iterm2_shell_integration.zsh" ]]; then
+  source "$ZSH/iterm/iterm2_shell_integration.zsh"
 fi
-

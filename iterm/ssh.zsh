@@ -34,18 +34,12 @@ _iterm_ssh_wrapper() {
   local ret=$?
 
   if [[ "$TERM_PROGRAM" == "iTerm.app" ]]; then
-    # Reset tab chrome color and background color to profile defaults
+    # Reset chrome and background to profile defaults, then let the tab colour
+    # engine restore the project colour, title and badge (role included)
     echo -ne "\033]6;1;bg;*;default\a"
     printf "\033]111\007\033]1337;SetColors=bg=default\007"
-
-    if [[ -n "$TERMINAL_ROLE" ]]; then
-      role "$TERMINAL_ROLE" > /dev/null
-    else
-      # Clear badge override to let profile default badge show
-      printf "\e]1337;SetBadgeFormat=\a"
-      local dir_name="$(basename "$PWD")"
-      print -Pn "\e]1;${dir_name}\a\e]2;${dir_name}\a\e]0;${dir_name}\a"
-    fi
+    _TABCOLOR_LAST=""
+    (( $+functions[_tabcolor_hook] )) && _tabcolor_hook
   fi
 
   return $ret

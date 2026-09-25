@@ -37,9 +37,13 @@ print -r -- "PROJECTS=$PROJECTS"
 print -r -- "PATH=$PATH"
 print -r -- "DOTFILES_PROFILE=$DOTFILES_PROFILE"
 print -r -- "DOTFILES_TAGS=$DOTFILES_TAGS"
-for f in tabcolor gwa cpush role reload! gsp gandalf_prompt_precmd; do
+for f in tabcolor gwa cpush role reload! gsp gandalf_prompt_precmd claude _tabcolor_preset_for; do
   print -r -- "WHENCE:$f=$(whence -w $f 2>/dev/null)"
 done
+print -r -- "PRESET_COSMIC=$(TABCOLOR_PRESET= _tabcolor_preset_for $HOME/src/pico/cosmic-clock 2>/dev/null)"
+print -r -- "PRESET_DOTFILES=$(TABCOLOR_PRESET= _tabcolor_preset_for $HOME/src/system/dotfiles 2>/dev/null)"
+print -r -- "PRESET_NONE=$(TABCOLOR_PRESET= _tabcolor_preset_for /usr/local 2>/dev/null)"
+print -r -- "PRESET_OVERRIDE=$(TABCOLOR_PRESET=herd _tabcolor_preset_for /usr/local 2>/dev/null)"
 print -r -- "PROBE_DONE"
 '
 
@@ -146,7 +150,7 @@ fi
 #------------------------------------------------------------------------------
 # 4. Topic functions and aliases that must exist
 #------------------------------------------------------------------------------
-for spec in tabcolor:function gwa:function cpush:function role:function reload!:alias gsp:alias; do
+for spec in tabcolor:function gwa:function cpush:function role:function claude:function reload!:alias gsp:alias; do
   name="${spec%%:*}"; kind="${spec##*:}"
   actual="$(whence_kind main "$name")"
   [[ "$actual" == "$kind" ]] && ok "$name is a $kind" || bad "$name is '${actual:-missing}', expected $kind"
@@ -160,6 +164,29 @@ if grep -q '^PROBE_DONE' "$tmp/safe.out"; then
   [[ -z "$v" ]] && ok "DOTFILES_SAFE=1 starts a shell with no topic files loaded" || bad "DOTFILES_SAFE=1 still loaded topic files"
 else
   bad "DOTFILES_SAFE=1 shell did not start"
+fi
+
+#------------------------------------------------------------------------------
+# 5b. Tab colour engine: path map first, .envrc override, nothing elsewhere
+#------------------------------------------------------------------------------
+if [[ "$expected_profile" == "home" ]]; then
+  v="$(get main PRESET_COSMIC)"; [[ "$v" == cosmic ]] && ok "path map: cosmic-clock -> cosmic" || bad "path map gave '$v' for cosmic-clock, expected cosmic"
+fi
+v="$(get main PRESET_DOTFILES)"; [[ "$v" == dotfiles ]] && ok "path map: dotfiles -> dotfiles" || bad "path map gave '$v' for dotfiles, expected dotfiles"
+v="$(get main PRESET_NONE)"; [[ -z "$v" ]] && ok "path map: unknown directory has no preset" || bad "path map gave '$v' for /usr/local"
+v="$(get main PRESET_OVERRIDE)"; [[ "$v" == herd ]] && ok "TABCOLOR_PRESET from .envrc overrides the map" || bad "override gave '$v', expected herd"
+
+if [[ "$(uname -s)" == Darwin ]]; then
+  dp="$HOME/Library/Application Support/iTerm2/DynamicProfiles/dotfiles-default.json"
+  [[ -L "$dp" ]] && ok "iTerm 'Dotfiles Default' profile is linked" || bad "iTerm dynamic profile not linked (run script/bootstrap)"
+  want_guid="$(sed -nE 's/.*"Guid": *"([^"]+)".*/\1/p' "$DOTFILES_ROOT/iterm/DynamicProfiles/dotfiles-default.json" | head -1)"
+  have_guid="$(defaults read com.googlecode.iterm2 "Default Bookmark Guid" 2>/dev/null || true)"
+  [[ "$have_guid" == "$want_guid" ]] && ok "iTerm default profile is 'Dotfiles Default'" || bad "iTerm default profile is not 'Dotfiles Default' (run script/bootstrap, restart iTerm)"
+  [[ -e "$HOME/Library/Application Support/iTerm2/DynamicProfiles/projects.json" ]] && bad "retired projects.json still in DynamicProfiles" || ok "retired dynamic profiles are gone"
+  if [[ "$expected_profile" == "home" ]]; then
+    "$DOTFILES_ROOT/bin/claude-hooks" check && ok "Claude hooks match claude/hooks.json" || bad "Claude hooks differ from claude/hooks.json (run: bin/claude-hooks install)"
+    [[ -e "$HOME/.claude/session-tab-color.sh" ]] && bad "old ~/.claude/session-tab-color.sh still exists" || ok "old Claude tab-colour hook script is gone"
+  fi
 fi
 
 #------------------------------------------------------------------------------
@@ -184,7 +211,7 @@ done < <(git -C "$DOTFILES_ROOT" ls-files -- '*.zsh' 'zsh/*.symlink' | grep -v '
 [[ $syntax_bad -eq 0 ]] && ok "every tracked zsh file parses" || bad "zsh syntax errors above"
 
 # Files that must not exist once a phase has removed them (added per phase)
-absent=(zsh/gandalf.zsh)
+absent=(zsh/gandalf.zsh system/tabcolor-palettes.sh iterm/DynamicProfiles/projects.json)
 for f in "${absent[@]}"; do
   [[ -e "$DOTFILES_ROOT/$f" ]] && bad "$f should have been removed" || ok "$f is gone"
 done

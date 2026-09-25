@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+#
+# claude-hooks — keep the hooks section of ~/.claude/settings.json equal to
+# claude/hooks.json (the repo's copy), leaving every other setting alone.
+#
+#   claude-hooks install   write the hooks if they differ (creates settings.json if missing)
+#   claude-hooks check     exit 0 when already in sync, 1 otherwise
+#   claude-hooks diff      show what would change
+
+set -euo pipefail
+ROOT="$(cd "$(dirname "$0")/.." && pwd -P)"
+SRC="$ROOT/claude/hooks.json"
+DST="${CLAUDE_SETTINGS:-$HOME/.claude/settings.json}"
+cmd="${1:-check}"
+
+python3 - "$cmd" "$SRC" "$DST" <<'PY'
+import json, sys, os
+cmd, src, dst = sys.argv[1:4]
+want = json.load(open(src))
+have = {}
+if os.path.exists(dst):
+    have = json.load(open(dst))
+same = have.get('hooks') == want
+if cmd == 'check':
+    sys.exit(0 if same else 1)
+if cmd == 'diff':
+    if same:
+        print('hooks in sync'); sys.exit(0)
+    print('current:'); print(json.dumps(have.get('hooks'), indent=2))
+    print('wanted:');  print(json.dumps(want, indent=2))
+    sys.exit(1)
+if cmd == 'install':
+    if same:
+        print('claude-hooks: already in sync'); sys.exit(0)
+    have['hooks'] = want
+    os.makedirs(os.path.dirname(dst), exist_ok=True)
+    tmp = dst + '.tmp'
+    with open(tmp, 'w') as f:
+        json.dump(have, f, indent=2); f.write('\n')
+    os.replace(tmp, dst)
+    print(f'claude-hooks: wrote hooks into {dst}')
+    sys.exit(0)
+sys.exit(f'unknown command {cmd}')
+PY
