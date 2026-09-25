@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+#
+# script/setup — the one command for a new or an existing machine.
+#
+#   script/setup --profile home|work [--tag <name>]... [--dry-run] [--no-install]
+#
+# Runs, in order, all idempotent:
+#   1. script/bootstrap   symlinks, profile, git hooks, secrets key
+#   2. script/install     packages (brew bundle on macOS, apt on Linux)
+#   3. script/bootstrap   again, so secrets decrypt now that sops/age exist
+#   4. script/test        the promises in CLAUDE.md, in a fresh interactive zsh
+#
+# Re-run it whenever you like. --dry-run reports what bootstrap would do,
+# skips the package install, and still runs the test.
+
+set -e
+cd "$(dirname "$0")/.."
+
+BOOTSTRAP_ARGS=()
+DRY_RUN=false
+NO_INSTALL=false
+while [ $# -gt 0 ]
+do
+  case "$1" in
+    --dry-run|-n) DRY_RUN=true; BOOTSTRAP_ARGS+=("--dry-run"); shift ;;
+    --no-install) NO_INSTALL=true; shift ;;
+    --profile|--tag) BOOTSTRAP_ARGS+=("$1" "$2"); shift 2 ;;
+    --profile=*|--tag=*) BOOTSTRAP_ARGS+=("$1"); shift ;;
+    -h|--help) sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    *) echo "setup: unknown option '$1'" >&2; exit 2 ;;
+  esac
+done
+
+step () { printf '\n\033[1m› %s\033[0m\n' "$1"; }
+
+step "script/bootstrap ${BOOTSTRAP_ARGS[*]}"
+script/bootstrap "${BOOTSTRAP_ARGS[@]}"
+
+if [ "$DRY_RUN" = true ]
+then
+  step "script/install (skipped: dry run)"
+elif [ "$NO_INSTALL" = true ]
+then
+  step "script/install (skipped: --no-install)"
+else
+  step "script/install"
+  script/install
+  step "script/bootstrap ${BOOTSTRAP_ARGS[*]} (second pass, for secrets)"
+  script/bootstrap "${BOOTSTRAP_ARGS[@]}"
+fi
+
+step "script/test"
+script/test

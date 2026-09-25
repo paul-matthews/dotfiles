@@ -13,6 +13,17 @@ Shell secrets (exports, aliases, real paths) shared by every machine, encrypted 
 
 ---
 
+## 🎨 Tabs & Roles
+Tab colour, title and badge follow the project: `.envrc` preset first, else the path map in `system/tabcolor-presets.sh`.
+
+- `role device` → tab reads `🪐 COS / device`; `role` clears; `role -s` shows (`rgit`, `rbuild`, `rdevice`, `rclear`)
+- `claude` / `jc` → darkened project colour, 🤖 title, tool badge; restored on exit
+- `ssh host` → amber tab while connected, project colour back after
+- `tabcolor <preset>` · `tabcolor danger` · `tabcolor reset` · `tabcolor-preview <preset>`
+- `gsp` → verified pull: fetch, rebase, `script/test`, roll back on failure
+
+---
+
 ## 🎨 Terminal Rendering
 If you see unknown characters in `ls` or your prompt:
 - **Reason:** `eza` and `starship` require a **Nerd Font**.

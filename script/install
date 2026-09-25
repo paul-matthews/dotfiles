@@ -35,6 +35,7 @@ is_pi () {
 }
 
 install_macos () {
+  sh homebrew/install.sh
   echo "› brew bundle (Brewfile)"
   brew bundle --file=Brewfile
 

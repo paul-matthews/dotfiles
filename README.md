@@ -47,30 +47,20 @@ There's a few special files in the hierarchy.
 
 ## install
 
-Run this:
+One command per machine, idempotent, re-run whenever you like:
 
-```sh
-git clone https://github.com/holman/dotfiles.git ~/.dotfiles
-cd ~/.dotfiles
-script/bootstrap
-```
+| Situation | Steps |
+| --- | --- |
+| New Mac, Pi or Linux box | `git clone git@github.com:paul-matthews/dotfiles.git ~/src/system/dotfiles && ln -s ~/src/system/dotfiles ~/.dotfiles`, then `script/setup --profile home` (or `work`) |
+| Existing machine after a change | `gsp` in the dotfiles directory (a verified pull: it runs `script/test` and rolls back on failure), then `reload!`; `script/setup --profile X` once if bootstrap gained a step |
+| Adding a machine to secrets | It prints its public age key during setup; on a machine that can already decrypt: `secrets add-recipient age1...`, commit, push |
+| Work machine with no human at the keyboard | See `handoff/README.md`; the agent follows a runbook and reports by commit on `from/<machine-id>` |
 
-This will symlink the appropriate files in `.dotfiles` to your home directory.
-Everything is configured and tweaked within `~/.dotfiles`.
-
-The main file you'll want to change right off the bat is `zsh/zshrc.symlink`,
-which sets up a few paths that'll be different on your particular machine.
-
-`dot` is a simple script that installs some dependencies, sets sane macOS
-defaults, and so on. Tweak this script, and occasionally run `dot` from
-time to time to keep your environment fresh and up-to-date. You can find
-this script in `bin/`.
-
-## manual steps after install
-
-After running `script/bootstrap` and `brew bundle`, these steps must be done manually:
-
-- **iTerm2 font**: Set font to "MesloLGS Nerd Font" in Settings → Profiles → Text (required for starship prompt icons)
+`script/setup` runs `script/bootstrap` (symlinks, profile, git hooks, secrets key),
+`script/install` (brew bundle on macOS, apt on Linux), bootstrap again for secrets,
+and `script/test`. There are no manual steps afterwards: iTerm's font comes from
+the "Dotfiles Default" dynamic profile that bootstrap makes the default (restart
+iTerm once).
 
 ## bugs
 

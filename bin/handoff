@@ -1,0 +1,108 @@
+#!/usr/bin/env bash
+#
+# handoff — helpers for machines that report back only through git
+# (work Macs and the work Linux box, driven by jetski). See handoff/README.md.
+#
+#   handoff id                 this machine's id (<profile>-<os>-<6 chars>), created once
+#   handoff branch             switch to from/<id>, created from the current branch if
+#                              missing; disables commit signing for this repo on work
+#   handoff key                copy this machine's public age key to handoff/keys/<id>.age.pub
+#   handoff note "<text>"      append a timestamped line to the local plain-text report
+#   handoff capture "<cmd>"    run a command and append its output to the local report
+#   handoff report             encrypt the local report to handoff/reports/<id>.sops.md
+#   handoff commit             stage the report and key, commit with the RESULT/NEEDS
+#                              lines as the message, push from/<id>
+#   handoff result "<done|stopped at X>" "<nothing|what home must do>"
+#                              write the final RESULT/NEEDS block into the report
+#
+# The local report is ~/.dotfiles-handoff-report.md (append-only, plain text,
+# never committed). The encrypted copy in the repo can only be read at home.
+
+set -euo pipefail
+ROOT="$(cd "$(dirname "$0")/.." && pwd -P)"
+ID_FILE="$HOME/.dotfiles-machine-id"
+LOG="$HOME/.dotfiles-handoff-report.md"
+cmd="${1:-}"
+shift || true
+
+profile () { [ -r "$HOME/.dotfiles-profile" ] && tr -d '[:space:]' < "$HOME/.dotfiles-profile" || echo home; }
+os () { uname -s | tr '[:upper:]' '[:lower:]'; }
+
+machine_id () {
+  if [ ! -r "$ID_FILE" ]; then
+    local rand
+    # od reads exactly 8 bytes, so nothing here can die on SIGPIPE under pipefail
+    rand="$(od -An -N8 -tx1 /dev/urandom | tr -d ' \n' | cut -c1-6)"
+    printf '%s-%s-%s\n' "$(profile)" "$(os)" "$rand" > "$ID_FILE"
+  fi
+  printf '%s\n' "$(tr -d '[:space:]' < "$ID_FILE")"
+}
+
+stamp () { date '+%Y-%m-%d %H:%M:%S'; }
+
+case "$cmd" in
+  id)
+    machine_id ;;
+
+  branch)
+    id="$(machine_id)"
+    cd "$ROOT"
+    if [ "$(profile)" != "home" ]; then
+      git config --local commit.gpgsign false
+    fi
+    if git show-ref --verify --quiet "refs/heads/from/$id"; then
+      git checkout -q "from/$id"
+    else
+      git checkout -q -b "from/$id"
+    fi
+    echo "on branch from/$id" ;;
+
+  key)
+    id="$(machine_id)"
+    key="${SOPS_AGE_KEY_FILE:-$HOME/.config/sops/age/keys.txt}"
+    [ -r "$key" ] || { echo "handoff: no age key at $key (run script/bootstrap)" >&2; exit 1; }
+    mkdir -p "$ROOT/handoff/keys"
+    age-keygen -y "$key" > "$ROOT/handoff/keys/$id.age.pub"
+    echo "wrote handoff/keys/$id.age.pub" ;;
+
+  note)
+    printf '\n[%s] %s\n' "$(stamp)" "$*" >> "$LOG" ;;
+
+  capture)
+    { printf '\n[%s] $ %s\n```\n' "$(stamp)" "$*"; bash -c "$*" 2>&1 || true; printf '```\n'; } >> "$LOG" ;;
+
+  result)
+    printf '\nRESULT: %s\nNEEDS: %s\n' "${1:-done}" "${2:-nothing}" >> "$LOG" ;;
+
+  report)
+    id="$(machine_id)"
+    [ -r "$LOG" ] || { echo "handoff: no local report at $LOG yet" >&2; exit 1; }
+    command -v sops >/dev/null 2>&1 || { echo "handoff: sops not installed; run script/install first" >&2; exit 1; }
+    mkdir -p "$ROOT/handoff/reports"
+    sops --config "$ROOT/.sops.yaml" --encrypt --input-type binary --output-type yaml "$LOG" \
+      > "$ROOT/handoff/reports/$id.sops.md"
+    echo "wrote handoff/reports/$id.sops.md (encrypted to the recipients in .sops.yaml)" ;;
+
+  commit)
+    id="$(machine_id)"
+    cd "$ROOT"
+    branch="$(git rev-parse --abbrev-ref HEAD)"
+    [ "$branch" = "from/$id" ] || { echo "handoff: run 'handoff branch' first (on $branch, expected from/$id)" >&2; exit 1; }
+    result="$(grep -E '^RESULT:' "$LOG" | tail -1 || echo 'RESULT: unknown')"
+    needs="$(grep -E '^NEEDS:' "$LOG" | tail -1 || echo 'NEEDS: unknown')"
+    git add handoff/reports/ handoff/keys/ 2>/dev/null || true
+    git add -A
+    if git diff --cached --quiet; then
+      echo "handoff: nothing to commit"
+    else
+      git commit -q -m "handoff($id): ${result#RESULT: }" -m "$result" -m "$needs"
+    fi
+    git push -q -u origin "from/$id"
+    echo "pushed from/$id: $result | $needs" ;;
+
+  ""|-h|--help|help)
+    sed -n '2,22p' "$0" | sed 's/^# \{0,1\}//' ;;
+
+  *)
+    echo "handoff: unknown command '$cmd'" >&2; exit 2 ;;
+esac
