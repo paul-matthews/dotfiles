@@ -30,7 +30,7 @@ A file is sourced only if every tag in its name is one of this machine's tags. `
 - `script/bootstrap` — links symlinks, records the profile, installs the pre-commit hook; additive and idempotent, `--dry-run` shows what it would do
 - `script/pre-commit` — installed as the repo's git hook; blocks private keys, unencrypted secrets files and values from `~/.localrc.secrets`
 - `script/test` — starts a fresh interactive zsh in a pseudo-terminal and checks the promises below; `gsp` runs it after every pull
-- `script/install` — packages: `brew bundle` on macOS, `linux/packages.txt` via apt on any apt-based Linux (`name|fallback` per line), then every `*/install.sh`
+- `script/install` — packages: `brew bundle` on the core `Brewfile` then `Brewfile.<profile>` (`Brewfile.home` / `Brewfile.work`) on macOS; `linux/packages.txt` plus `linux/packages.pi.txt` via apt on any apt-based Linux (`name|fallback` per line); then every `*/install.sh`
 - `bin/secrets` — SOPS + age secrets shared across machines: `pull`, `push`, `status`, `keygen`, `add-recipient`; aliased as `secrets-pull` etc.
 - `bin/cheat` — colored cheatsheet script (run `cheat` to view)
 - `bin/sync-upstream` — rebase onto holman/master

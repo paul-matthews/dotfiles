@@ -222,6 +222,31 @@ fi
 ) && bad "pre-commit hook let a private key through" || ok "pre-commit hook blocks a commit containing a private key"
 
 #------------------------------------------------------------------------------
+# 8b. Packages (informational only: a new Brewfile entry must not fail gsp on
+#     machines that have not run script/install yet)
+#------------------------------------------------------------------------------
+if command -v brew >/dev/null 2>&1; then
+  expected_profile_file="Brewfile.$expected_profile"
+  brew list --formula 2>/dev/null > "$tmp/formulae"
+  brew list --cask 2>/dev/null > "$tmp/casks"
+  missing=()
+  for bf in Brewfile "$expected_profile_file"; do
+    [[ -f "$DOTFILES_ROOT/$bf" ]] || continue
+    while IFS= read -r name; do
+      grep -qx "$name" "$tmp/formulae" || missing+=("$name")
+    done < <(sed -nE "s/^brew '([^']+)'.*/\1/p" "$DOTFILES_ROOT/$bf")
+    while IFS= read -r name; do
+      grep -qx "$name" "$tmp/casks" || missing+=("$name (cask)")
+    done < <(sed -nE "s/^cask '([^']+)'.*/\1/p" "$DOTFILES_ROOT/$bf")
+  done
+  if [[ ${#missing[@]} -eq 0 ]]; then
+    ok "every package in Brewfile and $expected_profile_file is installed"
+  else
+    skp "packages from Brewfile and $expected_profile_file" "${#missing[@]} not installed, run script/install: ${missing[*]}"
+  fi
+fi
+
+#------------------------------------------------------------------------------
 # 9. Secrets: decrypted and in sync here, and push refuses to clobber a remote change
 #------------------------------------------------------------------------------
 if [[ -f "$DOTFILES_ROOT/secrets.sops.yaml" ]] && command -v sops >/dev/null 2>&1; then

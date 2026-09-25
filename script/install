@@ -2,10 +2,12 @@
 #
 # Run all dotfiles installers.
 #
-# macOS: brew bundle on the Brewfile, then every */install.sh.
-# Linux: apt packages from linux/packages.txt (any apt-based distro), then
-#        every */install.sh. Package names with | alternatives are tried in
-#        order; the first one apt knows about wins.
+# macOS: brew bundle on the core Brewfile, then Brewfile.<profile> (home|work
+#        from ~/.dotfiles-profile), then every */install.sh.
+# Linux: apt packages from linux/packages.txt (any apt-based distro), plus
+#        linux/packages.pi.txt on a Raspberry Pi, then every */install.sh.
+#        Package names with | alternatives are tried in order; the first one
+#        apt knows about wins.
 
 set -e
 
@@ -15,26 +17,37 @@ info () { printf "  [ \033[00;34m..\033[0m ] %s\n" "$1"; }
 ok ()   { printf "  [ \033[00;32mOK\033[0m ] %s\n" "$1"; }
 warn () { printf "  [ \033[0;33m!!\033[0m ] %s\n" "$1"; }
 
-install_macos () {
-  echo "› brew bundle"
-  brew bundle
+profile () {
+  local p="home"
+  if [ -r "$HOME/.dotfiles-profile" ]
+  then
+    p="$(tr -d '[:space:]' < "$HOME/.dotfiles-profile")"
+  fi
+  echo "${p:-home}"
 }
 
-install_linux () {
-  if [ -r /etc/os-release ]
+is_pi () {
+  if [ -r /proc/device-tree/model ] && grep -qi 'raspberry pi' /proc/device-tree/model 2>/dev/null
   then
-    info "linux: $(. /etc/os-release; echo "${PRETTY_NAME:-$ID} (ID=$ID ID_LIKE=${ID_LIKE:-})")"
-  fi
-
-  if ! command -v apt-get >/dev/null 2>&1
-  then
-    warn "apt-get not found: package install skipped; the shell config still works"
     return 0
   fi
+  [ -r "$HOME/.dotfiles-tags" ] && grep -qx pi "$HOME/.dotfiles-tags"
+}
 
-  echo "› apt-get update"
-  sudo apt-get update -qq
+install_macos () {
+  echo "› brew bundle (Brewfile)"
+  brew bundle --file=Brewfile
 
+  local extra="Brewfile.$(profile)"
+  if [ -f "$extra" ]
+  then
+    echo "› brew bundle ($extra)"
+    brew bundle --file="$extra"
+  fi
+}
+
+# apt_install_list <file>: install each line's first available package
+apt_install_list () {
   local line names name installed
   while IFS= read -r line
   do
@@ -56,7 +69,31 @@ install_linux () {
       fi
     done
     [ "$installed" = true ] || warn "no installable package among: $line"
-  done < linux/packages.txt
+  done < "$1"
+}
+
+install_linux () {
+  if [ -r /etc/os-release ]
+  then
+    info "linux: $(. /etc/os-release; echo "${PRETTY_NAME:-$ID} (ID=$ID ID_LIKE=${ID_LIKE:-})")"
+  fi
+
+  if ! command -v apt-get >/dev/null 2>&1
+  then
+    warn "apt-get not found: package install skipped; the shell config still works"
+    return 0
+  fi
+
+  echo "› apt-get update"
+  sudo apt-get update -qq
+
+  echo "› apt (linux/packages.txt)"
+  apt_install_list linux/packages.txt
+  if is_pi && [ -f linux/packages.pi.txt ]
+  then
+    echo "› apt (linux/packages.pi.txt)"
+    apt_install_list linux/packages.pi.txt
+  fi
 
   # starship has no apt package on most distros; use the official installer
   if ! command -v starship >/dev/null 2>&1
