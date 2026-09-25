@@ -11,3 +11,8 @@ fi
 
 # Cheatsheet (colored script in bin/, markdown in CHEATSHEET.md for GitHub)
 alias cheat='$ZSH/bin/cheat | less -R'
+
+# viddy — modern watch replacement (color, diff highlighting, bell on change)
+alias watch='viddy'
+alias vd='viddy --differences'
+alias vdn='viddy --differences --bell'
