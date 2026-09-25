@@ -5,7 +5,8 @@
 #
 #   handoff id                 this machine's id (<profile>-<os>-<6 chars>), created once
 #   handoff branch             switch to from/<id>, created from the current branch if
-#                              missing; disables commit signing for this repo on work
+#                              missing, else brought up to date with it; disables commit
+#                              signing for this repo on work
 #   handoff key                copy this machine's public age key to handoff/keys/<id>.age.pub
 #   handoff note "<text>"      append a timestamped line to the local plain-text report
 #   handoff capture "<cmd>"    run a command and append its output to the local report
@@ -50,12 +51,19 @@ case "$cmd" in
     if [ "$(profile)" != "home" ]; then
       git config --local commit.gpgsign false
     fi
+    base="$(git rev-parse --abbrev-ref HEAD)"
     if git show-ref --verify --quiet "refs/heads/from/$id"; then
       git checkout -q "from/$id"
+      # Bring the branch up to what was just pulled (fast-forward when home has
+      # merged it; a merge commit if there are unmerged local commits).
+      if ! git merge -q --no-edit "$base" >/dev/null 2>&1; then
+        echo "handoff: could not merge $base into from/$id; stop and report (git status)" >&2
+        exit 1
+      fi
     else
       git checkout -q -b "from/$id"
     fi
-    echo "on branch from/$id" ;;
+    echo "on branch from/$id (up to date with $base)" ;;
 
   key)
     id="$(machine_id)"
