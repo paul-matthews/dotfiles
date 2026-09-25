@@ -30,6 +30,8 @@ A file is sourced only if every tag in its name is one of this machine's tags. `
 - `script/bootstrap` — links symlinks, records the profile, installs the pre-commit hook; additive and idempotent, `--dry-run` shows what it would do
 - `script/pre-commit` — installed as the repo's git hook; blocks private keys, unencrypted secrets files and values from `~/.localrc.secrets`
 - `script/test` — starts a fresh interactive zsh in a pseudo-terminal and checks the promises below; `gsp` runs it after every pull
+- `script/install` — packages: `brew bundle` on macOS, `linux/packages.txt` via apt on any apt-based Linux (`name|fallback` per line), then every `*/install.sh`
+- `bin/secrets` — SOPS + age secrets shared across machines: `pull`, `push`, `status`, `keygen`, `add-recipient`; aliased as `secrets-pull` etc.
 - `bin/cheat` — colored cheatsheet script (run `cheat` to view)
 - `bin/sync-upstream` — rebase onto holman/master
 
@@ -51,6 +53,7 @@ Antigen is wrapped in `if [[ -z "$_ANTIGEN_LOADED" ]]` to prevent prompt breakag
 - **direnv controls per-project env** — `.envrc` files set `TABCOLOR_PRESET` and `PATH`. Tab colors are applied by a `precmd` hook in `system/tabcolor.zsh` that reads the env var (since direnv runs in a subshell and can't emit escape codes directly). The work machines' iTerm dynamic profiles under `iterm/` coexist with this for now; phase 4 of the normalisation plan replaces both with a single path map
 - **EDITOR is vim** — set in both `editors/env.zsh` and `zsh/zshrc.symlink`
 - **No `./bin` in PATH** — removed for security. Use explicit `./bin/something` for project-local scripts
+- **Secrets live in `secrets.sops.yaml`**, encrypted with age to one key per machine (recipients in `.sops.yaml`). `secrets-pull` decrypts to `~/.localrc.secrets` (mode 600), which zshrc sources; `secrets-push` re-encrypts and refuses if another machine pushed since your last pull, because encrypted files cannot be merged. Bootstrap generates a machine's key at `~/.config/sops/age/keys.txt` and prints the public key; a machine that can decrypt adds it with `secrets add-recipient`. Anything not for a public repo (tokens, work-internal names, real paths) goes here, as exports or aliases
 - **`gsp` is a verified pull** — after fetching and rebasing it runs `script/test` and rolls back to the previous head if the test fails, so a bad commit can never strand a machine. `GSP_NO_VERIFY=1` skips it in an emergency
 
 ## Tab color system
@@ -89,5 +92,6 @@ Run `script/test`. It starts a fresh interactive zsh under a pseudo-terminal and
 5. topic functions are defined: `tabcolor`, `gwa`, `cpush`, `role`, and the `reload!` and `gsp` aliases; `DOTFILES_SAFE=1` gives a shell with none of them
 6. no references to the old `Code` projects directory remain, `bin/` is not gitignored, every tracked zsh file parses, and files removed by a phase stay gone
 7. `script/bootstrap --dry-run` has nothing left to do, and the pre-commit hook is installed and blocks a private key
+8. secrets are decrypted and in sync, and `secrets push` refuses to overwrite a repo file that changed since the last pull
 
 `gsp` runs the same script after every pull. Add a check whenever a change makes a new promise.

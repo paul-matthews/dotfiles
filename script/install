@@ -1,13 +1,76 @@
 #!/usr/bin/env bash
 #
 # Run all dotfiles installers.
+#
+# macOS: brew bundle on the Brewfile, then every */install.sh.
+# Linux: apt packages from linux/packages.txt (any apt-based distro), then
+#        every */install.sh. Package names with | alternatives are tried in
+#        order; the first one apt knows about wins.
 
 set -e
 
-cd "$(dirname $0)"/..
+cd "$(dirname "$0")"/..
 
-echo "› brew bundle"
-brew bundle
+info () { printf "  [ \033[00;34m..\033[0m ] %s\n" "$1"; }
+ok ()   { printf "  [ \033[00;32mOK\033[0m ] %s\n" "$1"; }
+warn () { printf "  [ \033[0;33m!!\033[0m ] %s\n" "$1"; }
+
+install_macos () {
+  echo "› brew bundle"
+  brew bundle
+}
+
+install_linux () {
+  if [ -r /etc/os-release ]
+  then
+    info "linux: $(. /etc/os-release; echo "${PRETTY_NAME:-$ID} (ID=$ID ID_LIKE=${ID_LIKE:-})")"
+  fi
+
+  if ! command -v apt-get >/dev/null 2>&1
+  then
+    warn "apt-get not found: package install skipped; the shell config still works"
+    return 0
+  fi
+
+  echo "› apt-get update"
+  sudo apt-get update -qq
+
+  local line names name installed
+  while IFS= read -r line
+  do
+    line="${line%%#*}"
+    line="$(echo "$line" | tr -d '[:space:]')"
+    [ -z "$line" ] && continue
+    installed=false
+    IFS='|' read -ra names <<< "$line"
+    for name in "${names[@]}"
+    do
+      if apt-cache show "$name" >/dev/null 2>&1
+      then
+        if sudo apt-get install -y -qq "$name" >/dev/null
+        then
+          ok "$name"
+          installed=true
+          break
+        fi
+      fi
+    done
+    [ "$installed" = true ] || warn "no installable package among: $line"
+  done < linux/packages.txt
+
+  # starship has no apt package on most distros; use the official installer
+  if ! command -v starship >/dev/null 2>&1
+  then
+    echo "› starship (official installer)"
+    curl -sS https://starship.rs/install.sh | sh -s -- -y >/dev/null || warn "starship install failed"
+  fi
+}
+
+case "$(uname -s)" in
+  Darwin) install_macos ;;
+  Linux)  install_linux ;;
+  *)      warn "unsupported OS $(uname -s); skipping package install" ;;
+esac
 
 # find the installers and run them iteratively
-find . -name install.sh | while read installer ; do sh -c "${installer}" ; done
+find . -name install.sh -not -path './vendor/*' | while read -r installer ; do sh -c "${installer}" ; done

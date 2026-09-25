@@ -1,14 +1,34 @@
 # Dotfiles Cheatsheet
 
+## 🤫 Secrets (SOPS + age)
+Shell secrets (exports, aliases, real paths) shared by every machine, encrypted in the repo.
+
+- **Pull (decrypt):** `secrets-pull` → `~/.localrc.secrets` (mode 600, sourced by zshrc)
+- **Edit:** `~/.localrc.secrets` in plain text (never committed)
+- **Push (encrypt):** `secrets-push` → `secrets.sops.yaml`, then commit. Refused if another machine pushed since your last pull: pull, merge by hand, push again
+- **Status:** `secrets-status` (key, recipients, in sync?)
+
+### New machine
+`script/bootstrap` generates the machine's age key at `~/.config/sops/age/keys.txt` and prints its public key. Back the key up in 1Password, then on any machine that can already decrypt: `secrets add-recipient age1...` and commit. The new machine's next `secrets-pull` (or `script/bootstrap`) then works.
+
+---
+
+## 🎨 Terminal Rendering
+If you see unknown characters in `ls` or your prompt:
+- **Reason:** `eza` and `starship` require a **Nerd Font**.
+- **Fix:** Install a font from [nerdfonts.com](https://www.nerdfonts.com/) (e.g., JetBrainsMono) and set it in your Terminal/iTerm2 settings.
+
+---
+
 ## Navigation & Search                          │  Git Basics
                                                 │
 z <partial>         smart cd (zoxide)           │  gs              status -sb
 c <project>         cd ~/src/<project>          │  gpl             pull --prune
-Ctrl-T              fzf file picker             │  gl              log (short)
-Ctrl-R              fzf history search          │  gp              push origin HEAD
-Alt-C               fzf cd                      │  gc              commit
-rg <pattern>        ripgrep search              │  gca             commit -a
-fd <pattern>        fast find                   │  gac "msg"       add all + commit
+Ctrl-T              fzf file picker             │  gsp             safe pull (atomic)
+Ctrl-R              fzf history search          │  gl              log (short)
+Alt-C               fzf cd                      │  gp              push origin HEAD
+rg <pattern>        ripgrep search              │  gc              commit
+fd <pattern>        fast find                   │  gca             commit -a
                                                 │  gco <branch>    checkout
 ## Git Aliases (gitconfig)                      │  gb              branch
                                                 │  gcb             copy branch name

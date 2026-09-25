@@ -1,0 +1,5 @@
+creation_rules:
+  - path_regex: .*
+    # You can set SOPS_AGE_RECIPIENTS in your environment
+    # or list them here explicitly.
+    age: "age1huzhkqpnun7ch5npze3x5wlz3z8ht3q0y77ut6c8mnnt98pq7eystfghnp,age1wtmvua4t4zmqk7tcrpaz63dgttny9xmgswzr6k9v9fq5fnd6ddesv867gt"

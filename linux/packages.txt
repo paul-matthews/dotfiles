@@ -1,0 +1,19 @@
+# apt packages for Linux machines, installed by script/install.
+# One package per line. Alternatives separated by | are tried in order and the
+# first one apt knows about is installed (package names differ between
+# Debian, Ubuntu and Raspberry Pi OS). Lines starting with # are ignored.
+zsh
+git
+curl
+tmux
+ripgrep
+fd-find|fd
+fzf
+direnv
+bat
+zoxide
+eza|exa
+age
+sops
+python3
+vim

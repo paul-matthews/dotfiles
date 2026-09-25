@@ -122,15 +122,6 @@ alias -g T='| tail'
 alias -g L='| less'
 alias -g G="| grep"
 
-# Modern replacements for ls
-if (( $+commands[eza] ))
-then
-  alias ls="eza --icons --group-directories-first"
-  alias l="eza -lAh --icons --group-directories-first"
-  alias ll="eza -l --icons --group-directories-first"
-  alias la='eza -a --icons --group-directories-first'
-fi
-
 #==============================================================================
 # Prompt Configuration (Starship)
 #==============================================================================
@@ -160,18 +151,19 @@ if (( $+commands[direnv] )); then
 fi
 
 #==============================================================================
-# Local Configuration
+# Local Configuration & Secrets
 #==============================================================================
 
-if [[ -a ~/.localrc ]]
-then
-  source ~/.localrc
-fi
+# Stash your environment variables in ~/.localrc.secrets or ~/.localrc.
+# These files are gitignored and used for local-only or sensitive config.
+[[ -f ~/.localrc.secrets ]] && source ~/.localrc.secrets
+[[ -f ~/.localrc ]] && source ~/.localrc
 
 # NVM (installed via Homebrew)
 export NVM_DIR="$HOME/.nvm"
 [ -s "/opt/homebrew/opt/nvm/nvm.sh" ] && \. "/opt/homebrew/opt/nvm/nvm.sh"
 [ -s "/opt/homebrew/opt/nvm/etc/bash_completion.d/nvm" ] && \. "/opt/homebrew/opt/nvm/etc/bash_completion.d/nvm"
+[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
 
 #==============================================================================
 # iTerm2 Shell Integration & Dynamic Profiles (Automatic Profile Switching)

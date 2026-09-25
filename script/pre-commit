@@ -27,11 +27,11 @@ if grep -qE 'AGE-SECRET-KEY-1[0-9A-Z]{20,}|-----BEGIN [A-Z ]*PRIVATE KEY-----' <
   block "staged content contains a private key"
 fi
 
-# 2. Secrets files must be SOPS-encrypted (an .example file is exempt)
+# 2. Secrets files must be SOPS-encrypted (.example files and .sops.yaml are exempt)
 while IFS= read -r f; do
   [[ -z "$f" ]] && continue
   case "$f" in
-    *.example) continue ;;
+    *.example|.sops.yaml|*/.sops.yaml) continue ;;   # examples and the sops config are plaintext by design
     *secrets*.yaml|*secrets*.yml|*secrets*.json|*.sops.*)
       if ! git show ":$f" | grep -q 'ENC\['; then
         block "$f is a secrets file but is not SOPS-encrypted"

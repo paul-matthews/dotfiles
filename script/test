@@ -222,6 +222,30 @@ fi
 ) && bad "pre-commit hook let a private key through" || ok "pre-commit hook blocks a commit containing a private key"
 
 #------------------------------------------------------------------------------
+# 9. Secrets: decrypted and in sync here, and push refuses to clobber a remote change
+#------------------------------------------------------------------------------
+if [[ -f "$DOTFILES_ROOT/secrets.sops.yaml" ]] && command -v sops >/dev/null 2>&1; then
+  rc=0; "$DOTFILES_ROOT/bin/secrets" check || rc=$?
+  case $rc in
+    0) ok "secrets are decrypted and in sync with the repo" ;;
+    1) bad "secrets need a pull (run: secrets pull)" ;;
+    2) bad "this machine cannot decrypt the secrets yet (run: secrets status)" ;;
+  esac
+  cp "$DOTFILES_ROOT/secrets.sops.yaml" "$tmp/enc.yaml"
+  echo "x=1" > "$tmp/dec"; echo "not-the-real-hash" > "$tmp/state"
+  if SECRETS_ENC="$tmp/enc.yaml" SECRETS_DEC="$tmp/dec" SECRETS_STATE="$tmp/state" \
+       "$DOTFILES_ROOT/bin/secrets" push >/dev/null 2>"$tmp/push.err"; then
+    bad "secrets push overwrote a repo file that changed since the last pull"
+  elif grep -q 'refusing to push' "$tmp/push.err" && cmp -s "$tmp/enc.yaml" "$DOTFILES_ROOT/secrets.sops.yaml"; then
+    ok "secrets push refuses when the repo file changed since the last pull"
+  else
+    bad "secrets push failed for an unexpected reason: $(head -1 "$tmp/push.err")"
+  fi
+else
+  skp "secrets" "no secrets.sops.yaml or sops not installed"
+fi
+
+#------------------------------------------------------------------------------
 echo
 if [[ $fail -eq 0 ]]; then
   echo "PASS: $pass checks passed, $skip skipped"

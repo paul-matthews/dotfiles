@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
-# bootstrap links the dotfiles into $HOME, records this machine's profile and
-# installs the repo's git hooks.
+# bootstrap links the dotfiles into $HOME, records this machine's profile,
+# installs the repo's git hooks and sets up this machine's secrets key.
 #
 # It only ever adds things. A file or symlink that already exists is left
 # alone and reported; nothing is overwritten, backed up or removed. Re-run it
@@ -236,6 +236,39 @@ setup_git_hooks () {
   link_file "$DOTFILES_ROOT/script/pre-commit" "$hooks_dir/pre-commit"
 }
 
+setup_secrets () {
+  if ! command -v sops >/dev/null 2>&1 || ! command -v age-keygen >/dev/null 2>&1
+  then
+    info "sops/age not installed yet; run script/install, then script/bootstrap again to set up secrets"
+    return
+  fi
+
+  local key="${SOPS_AGE_KEY_FILE:-$HOME/.config/sops/age/keys.txt}"
+  if [ "$DRY_RUN" = true ]
+  then
+    if [ ! -r "$key" ]
+    then
+      would "generate this machine's age key at $key"
+    fi
+    local rc=0
+    bin/secrets check || rc=$?
+    case $rc in
+      1) would "decrypt secrets.sops.yaml to ~/.localrc.secrets" ;;
+      2) [ -r "$key" ] && info "secrets: this machine is not a recipient yet (secrets status)" ;;
+    esac
+    return
+  fi
+
+  bin/secrets keygen --quiet
+  local rc=0
+  bin/secrets pull --quiet || rc=$?
+  case $rc in
+    0) success "secrets decrypted to ~/.localrc.secrets" ;;
+    2) info "secrets: this machine cannot decrypt yet; see: secrets status" ;;
+    *) info "secrets: pull failed (rc=$rc); see: secrets status" ;;
+  esac
+}
+
 setup_iterm_layouts () {
   if [ "$(uname -s)" != "Darwin" ] || [ -f iterm/iterm_layouts.yaml.symlink ]
   then
@@ -290,6 +323,7 @@ fi
 setup_profile
 setup_gitconfig
 setup_git_hooks
+setup_secrets
 setup_iterm_layouts
 setup_iterm_dynamic_profiles
 setup_glow

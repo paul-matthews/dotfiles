@@ -4,7 +4,9 @@ export ZSH=$HOME/.dotfiles
 # your project folder that we can `c [tab]` to
 export PROJECTS=~/src
 
-eval "$(/opt/homebrew/bin/brew shellenv)"
+if [[ -f /opt/homebrew/bin/brew ]]; then
+  eval "$(/opt/homebrew/bin/brew shellenv)"
+fi
 
 # Obsidian CLI, only where the app is installed
 [[ -d /Applications/Obsidian.app/Contents/MacOS ]] && export PATH="$PATH:/Applications/Obsidian.app/Contents/MacOS"
