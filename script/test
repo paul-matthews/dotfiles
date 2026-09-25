@@ -228,6 +228,8 @@ done
 # 7. Bootstrap is idempotent on a configured machine
 #------------------------------------------------------------------------------
 if out="$("$DOTFILES_ROOT/script/bootstrap" --dry-run 2>&1)"; then
+  # a pending secrets decrypt is state, not configuration; see the secrets check
+  out="$(grep -v 'would: decrypt secrets' <<<"$out")"
   if grep -q 'would:' <<<"$out"; then
     bad "bootstrap --dry-run still has something to do:"
     grep 'would:' <<<"$out" | sed 's/^/      /'
@@ -285,11 +287,13 @@ fi
 # 9. Secrets: decrypted and in sync here, and push refuses to clobber a remote change
 #------------------------------------------------------------------------------
 if [[ -f "$DOTFILES_ROOT/secrets.sops.yaml" ]] && command -v sops >/dev/null 2>&1; then
+  # State is informational: a pull that brings new secrets, or a machine that
+  # is not a recipient yet, must not make gsp roll a pull back.
   rc=0; "$DOTFILES_ROOT/bin/secrets" check || rc=$?
   case $rc in
     0) ok "secrets are decrypted and in sync with the repo" ;;
-    1) bad "secrets need a pull (run: secrets pull)" ;;
-    2) bad "this machine cannot decrypt the secrets yet (run: secrets status)" ;;
+    1) skp "secrets in sync" "a pull is pending, run: secrets pull (gsp does this after a pull)" ;;
+    2) skp "secrets in sync" "this machine cannot decrypt yet, see: secrets status" ;;
   esac
   cp "$DOTFILES_ROOT/secrets.sops.yaml" "$tmp/enc.yaml"
   echo "x=1" > "$tmp/dec"; echo "not-the-real-hash" > "$tmp/state"

@@ -287,6 +287,13 @@ if [[ "$STASH_CREATED" == true && -n "$STASH_SHA" ]]; then
   fi
 fi
 
+# 6b. Sync secrets the pull may have brought, if this repo has them and this
+#     machine can decrypt (best effort: never fails the pull)
+SECRETS_TOOL="$(git rev-parse --show-toplevel 2>/dev/null)/bin/secrets"
+if [[ -x "$SECRETS_TOOL" ]]; then
+  "$SECRETS_TOOL" pull --quiet >/dev/null 2>&1 || true
+fi
+
 # 7. Verify the result; a failing script/test rolls everything back
 if ! run_verify; then
   # Local edits were reapplied in step 6; park them again so the rollback can
