@@ -165,6 +165,9 @@ export NVM_DIR="$HOME/.nvm"
 [ -s "/opt/homebrew/opt/nvm/etc/bash_completion.d/nvm" ] && \. "/opt/homebrew/opt/nvm/etc/bash_completion.d/nvm"
 [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
 
+# AI-tab wrappers must come after ~/.localrc, where tools like jc may be aliases
+(( $+functions[_ai_tabs_finalize] )) && _ai_tabs_finalize
+
 #==============================================================================
 # iTerm2 Shell Integration
 #==============================================================================

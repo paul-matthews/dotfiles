@@ -44,6 +44,9 @@ print -r -- "PRESET_COSMIC=$(TABCOLOR_PRESET= _tabcolor_preset_for $HOME/src/pic
 print -r -- "PRESET_DOTFILES=$(TABCOLOR_PRESET= _tabcolor_preset_for $HOME/src/system/dotfiles 2>/dev/null)"
 print -r -- "PRESET_NONE=$(TABCOLOR_PRESET= _tabcolor_preset_for /usr/local 2>/dev/null)"
 print -r -- "PRESET_OVERRIDE=$(TABCOLOR_PRESET=herd _tabcolor_preset_for /usr/local 2>/dev/null)"
+alias _probe_tool="echo probe-tool-ran"; _AI_TAB_CMDS+=(_probe_tool:PROBE); _ai_tabs_finalize
+print -r -- "WRAPPED_ALIAS=$(whence -w _probe_tool | awk "{print \$NF}")"
+print -r -- "WRAPPED_RUN=$(_probe_tool arg1 2>/dev/null | LC_ALL=C tr -d "\000-\037" | grep -o "probe-tool-ran arg1")"
 print -r -- "PROBE_DONE"
 '
 
@@ -72,6 +75,8 @@ whence_kind() {  # function | alias | command | ... ; empty when not defined
 }
 
 export probe
+# An agent's shell may have TERM=dumb, which makes starship complain on stderr
+[[ -z "${TERM:-}" || "$TERM" == dumb ]] && export TERM=xterm-256color
 run_probe main
 run_probe safe DOTFILES_SAFE=1
 
@@ -165,6 +170,9 @@ if grep -q '^PROBE_DONE' "$tmp/safe.out"; then
 else
   bad "DOTFILES_SAFE=1 shell did not start"
 fi
+
+v="$(get main WRAPPED_ALIAS)"; [[ "$v" == function ]] && ok "an aliased AI tool becomes a wrapped function after ~/.localrc" || bad "wrapped alias is '$v', expected function"
+v="$(get main WRAPPED_RUN)"; [[ "$v" == "probe-tool-ran arg1" ]] && ok "the wrapped alias runs its expansion with arguments" || bad "wrapped alias run gave '$v'"
 
 #------------------------------------------------------------------------------
 # 5b. Tab colour engine: path map first, .envrc override, nothing elsewhere
