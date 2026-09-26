@@ -319,6 +319,16 @@ if command -v sops >/dev/null 2>&1 && command -v age-keygen >/dev/null 2>&1; the
   else
     bad "secrets keygen did not adopt the existing ~/.age/key.txt"
   fi
+  # the public key can be read without age-keygen (sops alone is enough on a box without age)
+  mkdir -p "$tmp/nobin"; ln -s "$(command -v sops)" "$tmp/nobin/sops"; ln -s "$(command -v sed)" "$tmp/nobin/sed"
+  for b in grep head cut tr mktemp cat cmp mv rm chmod dirname basename mkdir cp shasum sha256sum wc python3 date; do
+    command -v "$b" >/dev/null 2>&1 && ln -sf "$(command -v "$b")" "$tmp/nobin/$b"
+  done
+  if [[ "$(PATH="$tmp/nobin" HOME="$fake" SOPS_AGE_KEY_FILE="$fake/.config/sops/age/keys.txt" "$DOTFILES_ROOT/bin/secrets" pubkey 2>/dev/null)" == age1* ]]; then
+    ok "secrets pubkey works without age-keygen installed"
+  else
+    bad "secrets pubkey needs age-keygen"
+  fi
   # pull refuses to overwrite a never-pulled local file that differs
   if [[ -f "$DOTFILES_ROOT/secrets.sops.yaml" ]] && "$DOTFILES_ROOT/bin/secrets" check >/dev/null 2>&1; then
     echo "# old local content" > "$tmp/olddec"

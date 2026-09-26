@@ -237,9 +237,9 @@ setup_git_hooks () {
 }
 
 setup_secrets () {
-  if ! command -v sops >/dev/null 2>&1 || ! command -v age-keygen >/dev/null 2>&1
+  if ! command -v sops >/dev/null 2>&1
   then
-    info "sops/age not installed yet; run script/install, then script/bootstrap again to set up secrets"
+    info "sops not installed yet; run script/install, then script/bootstrap again to set up secrets"
     return
   fi
 
