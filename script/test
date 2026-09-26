@@ -47,6 +47,8 @@ print -r -- "PRESET_OVERRIDE=$(TABCOLOR_PRESET=herd _tabcolor_preset_for /usr/lo
 alias _probe_tool="echo probe-tool-ran"; _AI_TAB_CMDS+=(_probe_tool:PROBE); _ai_tabs_finalize
 print -r -- "WRAPPED_ALIAS=$(whence -w _probe_tool | awk "{print \$NF}")"
 print -r -- "WRAPPED_RUN=$(_probe_tool arg1 2>/dev/null | LC_ALL=C tr -d "\000-\037" | grep -o "probe-tool-ran arg1")"
+print -r -- "AI_CMDS=${(j: :)_AI_TAB_CMDS}"
+print -r -- "LOAD_ORDER=$(_dotfiles_sorted x/ai.work.zsh x/ai.zsh x/ai.work.linux.zsh | tr "\n" " ")"
 print -r -- "PROBE_DONE"
 '
 
@@ -171,6 +173,8 @@ else
   bad "DOTFILES_SAFE=1 shell did not start"
 fi
 
+v="$(get main AI_CMDS)"; [[ "$v" == *claude:CLAUDE* && "$v" == *agy:ANTIGRAVITY* ]] && ok "AI wrapper registry holds the shared tools ($v)" || bad "AI wrapper registry is '$v'"
+v="$(get main LOAD_ORDER)"; [[ "$v" == "x/ai.zsh x/ai.work.zsh x/ai.work.linux.zsh " ]] && ok "an untagged topic file loads before its tagged variants" || bad "load order is '$v'"
 v="$(get main WRAPPED_ALIAS)"; [[ "$v" == function ]] && ok "an aliased AI tool becomes a wrapped function after ~/.localrc" || bad "wrapped alias is '$v', expected function"
 v="$(get main WRAPPED_RUN)"; [[ "$v" == "probe-tool-ran arg1" ]] && ok "the wrapped alias runs its expansion with arguments" || bad "wrapped alias run gave '$v'"
 

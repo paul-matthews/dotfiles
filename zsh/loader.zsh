@@ -84,11 +84,27 @@ _dotfiles_file_kind() {
 #------------------------------------------------------------------------------
 # Topic loader
 #------------------------------------------------------------------------------
+# Order files so an untagged file loads before its tagged variants
+# (foo.zsh before foo.work.zsh) whatever the glob order says, so a variant can
+# extend what the base file defined. Plain glob order put ai-tabs.work.zsh
+# before ai-tabs.zsh ('w' sorts before 'z') and the base file overwrote it.
+_dotfiles_sorted() {
+  local f base ntags
+  local -a parts
+  for f in "$@"; do
+    base="${f:t:r}"
+    parts=("${(@s:.:)base}")
+    ntags=$(( ${#parts} - 1 ))
+    print -r -- "${f:h}/${parts[1]} $ntags $f"
+  done | sort -k1,1 -k2,2n | cut -d' ' -f3-
+}
+
 _dotfiles_load_topics() {
   local -a config_files path_files topic_files completion_files
   local file
   typeset -U config_files
   config_files=($ZSH/**/*.zsh)
+  config_files=(${(f)"$(_dotfiles_sorted "${config_files[@]}")"})
 
   for file in "${config_files[@]}"; do
     [[ "$file" == */antigen.zsh || "$file" == */zsh/loader.zsh ]] && continue

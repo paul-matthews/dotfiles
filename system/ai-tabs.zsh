@@ -34,8 +34,8 @@ _ai_tab_wrap() {
 # each name, converting an alias of that name if ~/.localrc defined one.
 #   claude  Claude Code
 #   agy     Antigravity CLI (the public one, installed to ~/.local/bin)
-typeset -ga _AI_TAB_CMDS
-_AI_TAB_CMDS=(claude:CLAUDE agy:ANTIGRAVITY)
+typeset -gaU _AI_TAB_CMDS
+_AI_TAB_CMDS+=(claude:CLAUDE agy:ANTIGRAVITY)
 
 # Some tools are aliases (jc on work machines, defined in ~/.localrc, which
 # loads after the topic files). An alias wins over a function of the same
