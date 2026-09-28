@@ -1,0 +1,14 @@
+#!/bin/zsh
+
+# ctop script to check for gcert status before connecting
+
+# Check if local gcert is valid
+if gcertstatus -quiet=true; then
+  echo "✅ Local gcert is valid. Connecting with SSH agent forwarding..."
+  # If local gcert is valid, ssh to the remote machine with Agent Forwarding
+  ssh -A -t pmatthews-ctop.c.googlers.com '~/bin/check_and_run_obsidian.sh'
+else
+  # If local gcert is not valid, run rw to re-authenticate
+  echo "❌ Local gcert is expired. Running rw to re-authenticate..."
+  rw -i '~/bin/check_and_run_obsidian.sh' pmatthews-ctop.c.googlers.com
+fi
