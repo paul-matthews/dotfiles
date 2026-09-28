@@ -3,6 +3,10 @@
 # Get editor completions based on the config schema
 "$schema" = 'https://starship.rs/config-schema.json'
 
+# Global timeout settings to prevent lag in large repos/vaults
+command_timeout = 2000
+scan_timeout = 100
+
 # Use custom symbols for modules
 [git_branch]
 symbol = " "

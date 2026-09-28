@@ -5,8 +5,8 @@
 # shortcut to this dotfiles path is $ZSH
 export ZSH=$HOME/.dotfiles
 
-# your project folder that we can `c [tab]` to
-export PROJECTS=~/Code
+# your project folder that we can `c [tab]` to (also set in zprofile; repeated here so non-login shells get it)
+export PROJECTS=~/src
 
 #==============================================================================
 # Antigen (Plugin Manager)
@@ -54,31 +54,19 @@ fi
 # Dotfiles Topic Loader
 #==============================================================================
 
-# all of our zsh files
-typeset -U config_files
-config_files=($ZSH/**/*.zsh)
-
-# load the path files
-for file in ${(M)config_files:#*/path.zsh}
-do
-  source $file
-done
-
-# load everything but the path and completion files
-for file in ${${config_files:#*/path.zsh}:#*/completion.zsh}
-do
-  [[ "$file" == */zshrc.symlink ]] && continue
-  [[ "$file" == */antigen.zsh ]] && continue
-  source $file
-done
-
-# load every completion after everything else loads
-for file in ${(M)config_files:#*/completion.zsh}
-do
-  source $file
-done
-
-unset config_files
+# Machine tags (DOTFILES_PROFILE, DOTFILES_TAGS) and the tag-aware topic loader
+# live in zsh/loader.zsh. If that file fails to load, fall back to the plain
+# glob loader so a shell always comes up. DOTFILES_SAFE=1 skips topic files.
+if ! source "$ZSH/zsh/loader.zsh" 2>/dev/null; then
+  print -u2 "dotfiles: zsh/loader.zsh failed to load, using the plain loader (check: zsh -n $ZSH/zsh/loader.zsh)"
+  if [[ -z "${DOTFILES_SAFE:-}" ]]; then
+    for file in $ZSH/**/*.zsh; do
+      [[ "$file" == */antigen.zsh || "$file" == */zsh/loader.zsh ]] && continue
+      source "$file"
+    done
+    unset file
+  fi
+fi
 
 #==============================================================================
 # Configuration
@@ -134,15 +122,6 @@ alias -g T='| tail'
 alias -g L='| less'
 alias -g G="| grep"
 
-# Modern replacements for ls
-if (( $+commands[eza] ))
-then
-  alias ls="eza --icons --group-directories-first"
-  alias l="eza -lAh --icons --group-directories-first"
-  alias ll="eza -l --icons --group-directories-first"
-  alias la='eza -a --icons --group-directories-first'
-fi
-
 #==============================================================================
 # Prompt Configuration (Starship)
 #==============================================================================
@@ -172,35 +151,27 @@ if (( $+commands[direnv] )); then
 fi
 
 #==============================================================================
-# Local Configuration
+# Local Configuration & Secrets
 #==============================================================================
 
-if [[ -a ~/.localrc ]]
-then
-  source ~/.localrc
-fi
+# Stash your environment variables in ~/.localrc.secrets or ~/.localrc.
+# These files are gitignored and used for local-only or sensitive config.
+[[ -f ~/.localrc.secrets ]] && source ~/.localrc.secrets
+[[ -f ~/.localrc ]] && source ~/.localrc
 
 # NVM (installed via Homebrew)
 export NVM_DIR="$HOME/.nvm"
 [ -s "/opt/homebrew/opt/nvm/nvm.sh" ] && \. "/opt/homebrew/opt/nvm/nvm.sh"
 [ -s "/opt/homebrew/opt/nvm/etc/bash_completion.d/nvm" ] && \. "/opt/homebrew/opt/nvm/etc/bash_completion.d/nvm"
+[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
+
+# AI-tab wrappers must come after ~/.localrc, where tools like jc may be aliases
+(( $+functions[_ai_tabs_finalize] )) && _ai_tabs_finalize
 
 #==============================================================================
-# iTerm2 Shell Integration & Dynamic Profiles (Automatic Profile Switching)
+# iTerm2 Shell Integration
 #==============================================================================
 
-if [[ "$TERM_PROGRAM" == "iTerm.app" ]]; then
-  # Auto-link dynamic profiles on this machine if not present
-  if [[ ! -e "$HOME/Library/Application Support/iTerm2/DynamicProfiles/projects.json" ]]; then
-    mkdir -p "$HOME/Library/Application Support/iTerm2/DynamicProfiles" 2>/dev/null
-    ln -sf "$ZSH/iterm/DynamicProfiles/projects.json" "$HOME/Library/Application Support/iTerm2/DynamicProfiles/projects.json" 2>/dev/null
-  fi
-
-  # Source iTerm2 shell integration from dotfiles repo
-  if [[ -f "$ZSH/iterm/iterm2_shell_integration.zsh" ]]; then
-    source "$ZSH/iterm/iterm2_shell_integration.zsh"
-  elif [[ -f "${HOME}/.iterm2_shell_integration.zsh" ]]; then
-    source "${HOME}/.iterm2_shell_integration.zsh"
-  fi
+if [[ "$TERM_PROGRAM" == "iTerm.app" && -f "$ZSH/iterm/iterm2_shell_integration.zsh" ]]; then
+  source "$ZSH/iterm/iterm2_shell_integration.zsh"
 fi
-

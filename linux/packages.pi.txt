@@ -1,0 +1,2 @@
+# Extra apt packages for Raspberry Pis (tag pi), installed after packages.txt.
+# Same format: one per line, | separates alternatives, # starts a comment.

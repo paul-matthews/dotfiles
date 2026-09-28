@@ -16,7 +16,6 @@
 *.class
 
 # generated files
-bin/
 out/
 gen/
 

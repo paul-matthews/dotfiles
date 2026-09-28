@@ -1,0 +1,118 @@
+{
+  "Notification": [
+    {
+      "hooks": [
+        {
+          "command": "~/.config/iterm2/cc-status",
+          "type": "command"
+        }
+      ]
+    }
+  ],
+  "PermissionRequest": [
+    {
+      "hooks": [
+        {
+          "command": "~/.config/iterm2/cc-status",
+          "type": "command"
+        }
+      ]
+    }
+  ],
+  "PostToolUse": [
+    {
+      "hooks": [
+        {
+          "command": "node \"~/.claude/hooks/gsd-context-monitor.js\"",
+          "type": "command"
+        }
+      ]
+    },
+    {
+      "hooks": [
+        {
+          "command": "~/.config/iterm2/cc-status",
+          "type": "command"
+        }
+      ]
+    }
+  ],
+  "PreToolUse": [
+    {
+      "hooks": [
+        {
+          "command": "~/.config/iterm2/cc-status",
+          "type": "command"
+        }
+      ]
+    }
+  ],
+  "SessionEnd": [
+    {
+      "hooks": [
+        {
+          "command": "~/.config/iterm2/cc-status",
+          "type": "command"
+        }
+      ]
+    }
+  ],
+  "SessionStart": [
+    {
+      "hooks": [
+        {
+          "command": "node \"~/.claude/hooks/gsd-check-update.js\"",
+          "type": "command"
+        }
+      ]
+    },
+    {
+      "hooks": [
+        {
+          "command": "~/.config/iterm2/cc-status",
+          "type": "command"
+        }
+      ]
+    }
+  ],
+  "Stop": [
+    {
+      "hooks": [
+        {
+          "command": "~/.config/iterm2/cc-status",
+          "type": "command"
+        }
+      ]
+    }
+  ],
+  "StopFailure": [
+    {
+      "hooks": [
+        {
+          "command": "~/.config/iterm2/cc-status",
+          "type": "command"
+        }
+      ]
+    }
+  ],
+  "SubagentStop": [
+    {
+      "hooks": [
+        {
+          "command": "~/.config/iterm2/cc-status",
+          "type": "command"
+        }
+      ]
+    }
+  ],
+  "UserPromptSubmit": [
+    {
+      "hooks": [
+        {
+          "command": "~/.config/iterm2/cc-status",
+          "type": "command"
+        }
+      ]
+    }
+  ]
+}

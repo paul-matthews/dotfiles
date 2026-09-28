@@ -1,0 +1,5 @@
+# Work Macs only (profile work). Installed after the core Brewfile.
+cask_args appdir: '/Applications'
+
+brew 'ruby-build'
+cask 'devin-desktop'

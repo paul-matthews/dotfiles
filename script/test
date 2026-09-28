@@ -1,0 +1,356 @@
+#!/usr/bin/env bash
+#
+# script/test — verify the dotfiles load correctly in a fresh interactive zsh.
+#
+# Starts a new `zsh -i` under a pseudo-terminal (so it sees exactly what a
+# terminal tab sees), collects facts from it, and checks them against what
+# CLAUDE.md promises. Exit 0 means every check passed.
+#
+# Used by:
+#   - each phase of the normalisation plan, as its "Test:" line
+#   - `gsp` after every pull (a failure rolls the pull back)
+#   - the work-machine handoff runbooks, whose reports quote its output
+#
+# Add a check here whenever a change adds a promise worth keeping.
+
+set -u
+cd "$(dirname "$0")/.." || exit 2
+DOTFILES_ROOT="$(pwd -P)"
+
+pass=0
+fail=0
+skip=0
+ok()   { printf '  \033[32m✓\033[0m %s\n' "$1"; pass=$((pass + 1)); }
+bad()  { printf '  \033[31m✗\033[0m %s\n' "$1"; fail=$((fail + 1)); }
+skp()  { printf '  \033[33m-\033[0m %s (skipped: %s)\n' "$1" "$2"; skip=$((skip + 1)); }
+
+tmp="$(mktemp -d)"
+trap 'rm -rf "$tmp"' EXIT
+
+#------------------------------------------------------------------------------
+# Probe: start a fresh interactive zsh under a pty, stderr captured separately
+#------------------------------------------------------------------------------
+probe='
+print
+print -r -- "EDITOR=$EDITOR"
+print -r -- "PROJECTS=$PROJECTS"
+print -r -- "PATH=$PATH"
+print -r -- "DOTFILES_PROFILE=$DOTFILES_PROFILE"
+print -r -- "DOTFILES_TAGS=$DOTFILES_TAGS"
+for f in tabcolor gwa cpush role reload! gsp gandalf_prompt_precmd claude agy _tabcolor_preset_for; do
+  print -r -- "WHENCE:$f=$(whence -w $f 2>/dev/null)"
+done
+print -r -- "PRESET_COSMIC=$(TABCOLOR_PRESET= _tabcolor_preset_for $HOME/src/pico/cosmic-clock 2>/dev/null)"
+print -r -- "PRESET_DOTFILES=$(TABCOLOR_PRESET= _tabcolor_preset_for $HOME/src/system/dotfiles 2>/dev/null)"
+print -r -- "PRESET_NONE=$(TABCOLOR_PRESET= _tabcolor_preset_for /usr/local 2>/dev/null)"
+print -r -- "PRESET_OVERRIDE=$(TABCOLOR_PRESET=herd _tabcolor_preset_for /usr/local 2>/dev/null)"
+alias _probe_tool="echo probe-tool-ran"; _AI_TAB_CMDS+=(_probe_tool:PROBE); _ai_tabs_finalize
+print -r -- "WRAPPED_ALIAS=$(whence -w _probe_tool | awk "{print \$NF}")"
+print -r -- "WRAPPED_RUN=$(_probe_tool arg1 2>/dev/null | LC_ALL=C tr -d "\000-\037" | grep -o "probe-tool-ran arg1")"
+print -r -- "AI_CMDS=${(j: :)_AI_TAB_CMDS}"
+print -r -- "LOAD_ORDER=$(_dotfiles_sorted x/ai.work.zsh x/ai.zsh x/ai.work.linux.zsh | tr "\n" " ")"
+print -r -- "PROBE_DONE"
+'
+
+# run_probe <name> [VAR=value ...]: writes $tmp/<name>.out (cleaned) and $tmp/<name>.err
+run_probe() {
+  local name="$1"; shift
+  local inner="zsh -ic \"\$0\" 2>\"\$1\""
+  if script --version >/dev/null 2>&1; then
+    # util-linux script (Linux)
+    env "$@" script -qec "zsh -c '$inner' \"\$probe\" \"$tmp/$name.err\"" /dev/null \
+      >"$tmp/$name.raw" 2>/dev/null </dev/null
+  else
+    # BSD script (macOS)
+    env "$@" script -q /dev/null zsh -c "$inner" "$probe" "$tmp/$name.err" \
+      >"$tmp/$name.raw" 2>/dev/null </dev/null
+  fi
+  # strip CRs, OSC escape sequences (iTerm shell integration) and control chars
+  perl -pe 's/\r//g; s/\e\][^\a\e]*(\a|\e\\)//g; s/\e\[[0-9;?]*[A-Za-z]//g; s/[\x00-\x08\x0b-\x1f]//g' \
+    <"$tmp/$name.raw" >"$tmp/$name.out"
+}
+
+get()    { grep -m1 "^$2=" "$tmp/$1.out" | cut -d= -f2-; }
+whence_kind() {  # function | alias | command | ... ; empty when not defined
+  local k; k="$(grep -m1 "^WHENCE:$2=" "$tmp/$1.out" | cut -d= -f2- | awk '{print $NF}')"
+  [[ "$k" == "none" ]] || printf '%s' "$k"
+}
+
+export probe
+# An agent's shell may have TERM=dumb, which makes starship complain on stderr
+[[ -z "${TERM:-}" || "$TERM" == dumb ]] && export TERM=xterm-256color
+run_probe main
+run_probe safe DOTFILES_SAFE=1
+
+echo "script/test: fresh interactive zsh in $DOTFILES_ROOT"
+
+#------------------------------------------------------------------------------
+# 1. Startup
+#------------------------------------------------------------------------------
+if grep -q '^PROBE_DONE' "$tmp/main.out"; then
+  ok "interactive zsh starts and reaches the prompt"
+else
+  bad "interactive zsh did not start"
+  head -20 "$tmp/main.err" 2>/dev/null | sed 's/^/      /'
+  trap - EXIT
+  exit 1
+fi
+
+if grep -q '[^[:space:]]' "$tmp/main.err" 2>/dev/null; then
+  bad "startup wrote to stderr:"
+  sed 's/^/      /' "$tmp/main.err" | head -20
+else
+  ok "startup wrote nothing to stderr"
+fi
+
+#------------------------------------------------------------------------------
+# 2. Environment promises
+#------------------------------------------------------------------------------
+v="$(get main EDITOR)"
+[[ "$v" == "vim" ]] && ok "EDITOR is vim" || bad "EDITOR is '$v', expected vim"
+
+v="$(get main PROJECTS)"
+[[ "$v" == "$HOME/src" ]] && ok "PROJECTS is ~/src" || bad "PROJECTS is '$v', expected $HOME/src"
+
+PATH_VAL="$(get main PATH)"
+case ":$PATH_VAL:" in
+  *":./bin:"*) bad "PATH contains ./bin" ;;
+  *) ok "PATH has no ./bin" ;;
+esac
+case "$PATH_VAL" in
+  *"/Users/holman/"*) bad "PATH contains /Users/holman/" ;;
+  *) ok "PATH has no /Users/holman/" ;;
+esac
+
+if [[ -d /Applications/Obsidian.app/Contents/MacOS ]]; then
+  case ":$PATH_VAL:" in
+    *":/Applications/Obsidian.app/Contents/MacOS:"*) ok "Obsidian is installed and on PATH" ;;
+    *) bad "Obsidian is installed but not on PATH" ;;
+  esac
+else
+  skp "Obsidian on PATH" "Obsidian not installed here"
+fi
+
+#------------------------------------------------------------------------------
+# 3. Machine profile and tags
+#------------------------------------------------------------------------------
+expected_profile="home"
+[[ -r "$HOME/.dotfiles-profile" ]] && expected_profile="$(tr -d '[:space:]' < "$HOME/.dotfiles-profile")"
+v="$(get main DOTFILES_PROFILE)"
+[[ "$v" == "$expected_profile" ]] && ok "DOTFILES_PROFILE is $expected_profile" || bad "DOTFILES_PROFILE is '$v', expected $expected_profile"
+
+os_tag="$(uname -s | tr '[:upper:]' '[:lower:]')"
+tags=" $(get main DOTFILES_TAGS) "
+if [[ "$tags" == *" $expected_profile "* && "$tags" == *" $os_tag "* ]]; then
+  ok "DOTFILES_TAGS contains '$expected_profile' and '$os_tag' (${tags# })"
+else
+  bad "DOTFILES_TAGS is '${tags# }', expected to contain '$expected_profile' and '$os_tag'"
+fi
+
+if [[ "$expected_profile" == "home" ]]; then
+  v="$(whence_kind main gandalf_prompt_precmd)"
+  [[ -z "$v" ]] && ok "work-only gandalf hook is not loaded on a home profile" || bad "gandalf hook loaded on a home profile"
+else
+  skp "gandalf hook absent" "work profile"
+fi
+
+#------------------------------------------------------------------------------
+# 4. Topic functions and aliases that must exist
+#------------------------------------------------------------------------------
+for spec in tabcolor:function gwa:function cpush:function role:function claude:function agy:function reload!:alias gsp:alias; do
+  name="${spec%%:*}"; kind="${spec##*:}"
+  actual="$(whence_kind main "$name")"
+  [[ "$actual" == "$kind" ]] && ok "$name is a $kind" || bad "$name is '${actual:-missing}', expected $kind"
+done
+
+#------------------------------------------------------------------------------
+# 5. Safe mode: DOTFILES_SAFE=1 gives a usable shell with no topic files
+#------------------------------------------------------------------------------
+if grep -q '^PROBE_DONE' "$tmp/safe.out"; then
+  v="$(whence_kind safe tabcolor)"
+  [[ -z "$v" ]] && ok "DOTFILES_SAFE=1 starts a shell with no topic files loaded" || bad "DOTFILES_SAFE=1 still loaded topic files"
+else
+  bad "DOTFILES_SAFE=1 shell did not start"
+fi
+
+v="$(get main AI_CMDS)"; [[ "$v" == *claude:CLAUDE* && "$v" == *agy:ANTIGRAVITY* ]] && ok "AI wrapper registry holds the shared tools ($v)" || bad "AI wrapper registry is '$v'"
+v="$(get main LOAD_ORDER)"; [[ "$v" == "x/ai.zsh x/ai.work.zsh x/ai.work.linux.zsh " ]] && ok "an untagged topic file loads before its tagged variants" || bad "load order is '$v'"
+v="$(get main WRAPPED_ALIAS)"; [[ "$v" == function ]] && ok "an aliased AI tool becomes a wrapped function after ~/.localrc" || bad "wrapped alias is '$v', expected function"
+v="$(get main WRAPPED_RUN)"; [[ "$v" == "probe-tool-ran arg1" ]] && ok "the wrapped alias runs its expansion with arguments" || bad "wrapped alias run gave '$v'"
+
+#------------------------------------------------------------------------------
+# 5b. Tab colour engine: path map first, .envrc override, nothing elsewhere
+#------------------------------------------------------------------------------
+if [[ "$expected_profile" == "home" ]]; then
+  v="$(get main PRESET_COSMIC)"; [[ "$v" == cosmic ]] && ok "path map: cosmic-clock -> cosmic" || bad "path map gave '$v' for cosmic-clock, expected cosmic"
+fi
+v="$(get main PRESET_DOTFILES)"; [[ "$v" == dotfiles ]] && ok "path map: dotfiles -> dotfiles" || bad "path map gave '$v' for dotfiles, expected dotfiles"
+v="$(get main PRESET_NONE)"; [[ -z "$v" ]] && ok "path map: unknown directory has no preset" || bad "path map gave '$v' for /usr/local"
+v="$(get main PRESET_OVERRIDE)"; [[ "$v" == herd ]] && ok "TABCOLOR_PRESET from .envrc overrides the map" || bad "override gave '$v', expected herd"
+
+if [[ "$(uname -s)" == Darwin ]]; then
+  dp="$HOME/Library/Application Support/iTerm2/DynamicProfiles/dotfiles-default.json"
+  [[ -L "$dp" ]] && ok "iTerm 'Dotfiles Default' profile is linked" || bad "iTerm dynamic profile not linked (run script/bootstrap)"
+  want_guid="$(sed -nE 's/.*"Guid": *"([^"]+)".*/\1/p' "$DOTFILES_ROOT/iterm/DynamicProfiles/dotfiles-default.json" | head -1)"
+  have_guid="$(defaults read com.googlecode.iterm2 "Default Bookmark Guid" 2>/dev/null || true)"
+  [[ "$have_guid" == "$want_guid" ]] && ok "iTerm default profile is 'Dotfiles Default'" || bad "iTerm default profile is not 'Dotfiles Default' (run script/bootstrap, restart iTerm)"
+  [[ -e "$HOME/Library/Application Support/iTerm2/DynamicProfiles/projects.json" ]] && bad "retired projects.json still in DynamicProfiles" || ok "retired dynamic profiles are gone"
+  if [[ "$expected_profile" == "home" ]]; then
+    "$DOTFILES_ROOT/bin/claude-hooks" check && ok "Claude hooks match claude/hooks.json" || bad "Claude hooks differ from claude/hooks.json (run: bin/claude-hooks install)"
+    [[ -e "$HOME/.claude/session-tab-color.sh" ]] && bad "old ~/.claude/session-tab-color.sh still exists" || ok "old Claude tab-colour hook script is gone"
+  fi
+fi
+
+#------------------------------------------------------------------------------
+# 6. Repository promises
+#------------------------------------------------------------------------------
+if git -C "$DOTFILES_ROOT" grep -q -e '~/Code' -e '$HOME/Code' -- . ':!vendor' ':!script/test' 2>/dev/null; then
+  bad "repo still references ~/Code"
+else
+  ok "no ~/Code references in the repo"
+fi
+
+if git -C "$DOTFILES_ROOT" check-ignore -q bin/probe-file-that-does-not-exist; then
+  bad "bin/ is gitignored"
+else
+  ok "bin/ is not gitignored"
+fi
+
+syntax_bad=0
+while IFS= read -r f; do
+  zsh -n "$f" 2>"$tmp/syn" || { syntax_bad=1; printf '      %s: %s\n' "$f" "$(head -1 "$tmp/syn")"; }
+done < <(git -C "$DOTFILES_ROOT" ls-files -- '*.zsh' 'zsh/*.symlink' | grep -v '^vendor/')
+[[ $syntax_bad -eq 0 ]] && ok "every tracked zsh file parses" || bad "zsh syntax errors above"
+
+# Files that must not exist once a phase has removed them (added per phase)
+absent=(zsh/gandalf.zsh system/tabcolor-palettes.sh iterm/DynamicProfiles/projects.json)
+for f in "${absent[@]}"; do
+  [[ -e "$DOTFILES_ROOT/$f" ]] && bad "$f should have been removed" || ok "$f is gone"
+done
+
+#------------------------------------------------------------------------------
+# 7. Bootstrap is idempotent on a configured machine
+#------------------------------------------------------------------------------
+if out="$("$DOTFILES_ROOT/script/bootstrap" --dry-run 2>&1)"; then
+  # a pending secrets decrypt is state, not configuration; see the secrets check
+  out="$(grep -v 'would: decrypt secrets' <<<"$out")"
+  if grep -q 'would:' <<<"$out"; then
+    bad "bootstrap --dry-run still has something to do:"
+    grep 'would:' <<<"$out" | sed 's/^/      /'
+  else
+    ok "bootstrap --dry-run proposes nothing"
+  fi
+else
+  bad "bootstrap --dry-run failed"
+fi
+
+#------------------------------------------------------------------------------
+# 8. Pre-commit hook: installed here, and blocks a private key
+#------------------------------------------------------------------------------
+hooks_dir="$(git -C "$DOTFILES_ROOT" rev-parse --git-path hooks)"
+[[ "$hooks_dir" != /* ]] && hooks_dir="$DOTFILES_ROOT/$hooks_dir"
+if [[ -L "$hooks_dir/pre-commit" && "$(readlink "$hooks_dir/pre-commit")" == "$DOTFILES_ROOT/script/pre-commit" ]]; then
+  ok "pre-commit hook is installed"
+else
+  bad "pre-commit hook is not installed (run script/bootstrap)"
+fi
+
+(
+  cd "$tmp" && git init -q hooktest && cd hooktest \
+    && ln -s "$DOTFILES_ROOT/script/pre-commit" .git/hooks/pre-commit \
+    && printf 'AGE-SECRET-KEY-1%s\n' "$(printf 'Q%.0s' $(seq 1 40))" > leak.txt && git add leak.txt \
+    && git -c user.email=t@t -c user.name=t -c commit.gpgsign=false commit -q -m leak >/dev/null 2>&1
+) && bad "pre-commit hook let a private key through" || ok "pre-commit hook blocks a commit containing a private key"
+
+#------------------------------------------------------------------------------
+# 8b. Packages (informational only: a new Brewfile entry must not fail gsp on
+#     machines that have not run script/install yet)
+#------------------------------------------------------------------------------
+if command -v brew >/dev/null 2>&1; then
+  expected_profile_file="Brewfile.$expected_profile"
+  brew list --formula 2>/dev/null > "$tmp/formulae"
+  brew list --cask 2>/dev/null > "$tmp/casks"
+  missing=()
+  for bf in Brewfile "$expected_profile_file"; do
+    [[ -f "$DOTFILES_ROOT/$bf" ]] || continue
+    while IFS= read -r name; do
+      grep -qx "$name" "$tmp/formulae" || missing+=("$name")
+    done < <(sed -nE "s/^brew '([^']+)'.*/\1/p" "$DOTFILES_ROOT/$bf")
+    while IFS= read -r name; do
+      grep -qx "$name" "$tmp/casks" || missing+=("$name (cask)")
+    done < <(sed -nE "s/^cask '([^']+)'.*/\1/p" "$DOTFILES_ROOT/$bf")
+  done
+  if [[ ${#missing[@]} -eq 0 ]]; then
+    ok "every package in Brewfile and $expected_profile_file is installed"
+  else
+    skp "packages from Brewfile and $expected_profile_file" "${#missing[@]} not installed, run script/install: ${missing[*]}"
+  fi
+fi
+
+#------------------------------------------------------------------------------
+# 9. Secrets: decrypted and in sync here, and push refuses to clobber a remote change
+#------------------------------------------------------------------------------
+if [[ -f "$DOTFILES_ROOT/secrets.sops.yaml" ]] && command -v sops >/dev/null 2>&1; then
+  # State is informational: a pull that brings new secrets, or a machine that
+  # is not a recipient yet, must not make gsp roll a pull back.
+  rc=0; "$DOTFILES_ROOT/bin/secrets" check || rc=$?
+  case $rc in
+    0) ok "secrets are decrypted and in sync with the repo" ;;
+    1) skp "secrets in sync" "a pull is pending, run: secrets pull (gsp does this after a pull)" ;;
+    2) skp "secrets in sync" "this machine cannot decrypt yet, see: secrets status" ;;
+  esac
+  cp "$DOTFILES_ROOT/secrets.sops.yaml" "$tmp/enc.yaml"
+  echo "x=1" > "$tmp/dec"; echo "not-the-real-hash" > "$tmp/state"
+  if SECRETS_ENC="$tmp/enc.yaml" SECRETS_DEC="$tmp/dec" SECRETS_STATE="$tmp/state" \
+       "$DOTFILES_ROOT/bin/secrets" push >/dev/null 2>"$tmp/push.err"; then
+    bad "secrets push overwrote a repo file that changed since the last pull"
+  elif grep -q 'refusing to push' "$tmp/push.err" && cmp -s "$tmp/enc.yaml" "$DOTFILES_ROOT/secrets.sops.yaml"; then
+    ok "secrets push refuses when the repo file changed since the last pull"
+  else
+    bad "secrets push failed for an unexpected reason: $(head -1 "$tmp/push.err")"
+  fi
+else
+  skp "secrets" "no secrets.sops.yaml or sops not installed"
+fi
+
+if command -v sops >/dev/null 2>&1 && command -v age-keygen >/dev/null 2>&1; then
+  # keygen adopts a key from an older setup instead of generating a second one
+  fake="$tmp/fakehome"; mkdir -p "$fake/.age"
+  age-keygen -o "$fake/.age/key.txt" 2>/dev/null
+  if HOME="$fake" SOPS_AGE_KEY_FILE= "$DOTFILES_ROOT/bin/secrets" keygen >/dev/null 2>&1 \
+     && cmp -s "$fake/.age/key.txt" "$fake/.config/sops/age/keys.txt"; then
+    ok "secrets keygen adopts an existing ~/.age/key.txt instead of generating a new key"
+  else
+    bad "secrets keygen did not adopt the existing ~/.age/key.txt"
+  fi
+  # the public key can be read without age-keygen (sops alone is enough on a box without age)
+  mkdir -p "$tmp/nobin"; ln -s "$(command -v sops)" "$tmp/nobin/sops"; ln -s "$(command -v sed)" "$tmp/nobin/sed"
+  for b in bash env grep head cut tr mktemp cat cmp mv rm chmod dirname basename mkdir cp shasum sha256sum wc python3 date; do
+    command -v "$b" >/dev/null 2>&1 && ln -sf "$(command -v "$b")" "$tmp/nobin/$b"
+  done
+  if [[ "$(PATH="$tmp/nobin" HOME="$fake" SOPS_AGE_KEY_FILE="$fake/.config/sops/age/keys.txt" "$DOTFILES_ROOT/bin/secrets" pubkey 2>/dev/null)" == age1* ]]; then
+    ok "secrets pubkey works without age-keygen installed"
+  else
+    bad "secrets pubkey needs age-keygen"
+  fi
+  # pull refuses to overwrite a never-pulled local file that differs
+  if [[ -f "$DOTFILES_ROOT/secrets.sops.yaml" ]] && "$DOTFILES_ROOT/bin/secrets" check >/dev/null 2>&1; then
+    echo "# old local content" > "$tmp/olddec"
+    rc=0; SECRETS_DEC="$tmp/olddec" SECRETS_STATE="$tmp/nostate" "$DOTFILES_ROOT/bin/secrets" pull >/dev/null 2>&1 || rc=$?
+    if [[ $rc -eq 3 && "$(cat "$tmp/olddec")" == "# old local content" ]]; then
+      ok "secrets pull keeps a never-pulled local file that differs from the repo"
+    else
+      bad "secrets pull overwrote or mishandled a never-pulled local file (rc=$rc)"
+    fi
+  fi
+fi
+
+#------------------------------------------------------------------------------
+echo
+if [[ $fail -eq 0 ]]; then
+  echo "PASS: $pass checks passed, $skip skipped"
+  exit 0
+else
+  echo "FAIL: $fail failed, $pass passed, $skip skipped"
+  exit 1
+fi

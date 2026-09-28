@@ -7,3 +7,6 @@ export XDG_CONFIG_HOME="$HOME/.config"
 # -X: Do not clear screen / initialize terminal screen buffer on exit
 export PAGER="less -RFX"
 export LESS="-RFX"
+
+# SOPS/age key for the shared secrets (see bin/secrets); same path on every OS
+export SOPS_AGE_KEY_FILE="${SOPS_AGE_KEY_FILE:-$HOME/.config/sops/age/keys.txt}"

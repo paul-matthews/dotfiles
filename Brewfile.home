@@ -1,0 +1,26 @@
+# Home Macs only (profile home). Installed after the core Brewfile.
+cask_args appdir: '/Applications'
+
+# Media
+brew 'yt-dlp'
+cask 'vlc'
+cask 'quicklook-video'
+cask 'plex'
+cask 'sonos'
+
+# Pico / RPi toolchain (cosmic-clock and friends)
+brew 'cmake'
+brew 'ccache'
+brew 'arm-none-eabi-gcc'
+brew 'arm-none-eabi-binutils'
+brew 'mpremote'
+cask 'raspberry-pi-imager'
+
+# Android
+cask 'android-platform-tools'
+
+# Apps
+cask '1password'
+cask 'ghostty'
+cask 'steam'
+cask 'whatsapp'
