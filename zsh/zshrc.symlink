@@ -176,9 +176,9 @@ if [[ "$TERM_PROGRAM" == "iTerm.app" && -f "$ZSH/iterm/iterm2_shell_integration.
   source "$ZSH/iterm/iterm2_shell_integration.zsh"
 fi
 
-# bun completions
-[ -s "/Users/paulmatthews/.bun/_bun" ] && source "/Users/paulmatthews/.bun/_bun"
-
-# bun
-export BUN_INSTALL="$HOME/.bun"
-export PATH="$BUN_INSTALL/bin:$PATH"
+# bun (JavaScript runtime), only where it is installed
+if [[ -d "$HOME/.bun/bin" ]]; then
+  export BUN_INSTALL="$HOME/.bun"
+  export PATH="$BUN_INSTALL/bin:$PATH"
+  [[ -s "$BUN_INSTALL/_bun" ]] && source "$BUN_INSTALL/_bun"
+fi
