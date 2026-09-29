@@ -8,7 +8,9 @@ repo, and everything you have to say goes back as a commit on your own branch.
 
 1. This file, to the end.
 2. `CLAUDE.md` at the repo root: what the repo is and the promises `script/test` checks.
-3. The runbook for this machine: `handoff/work-darwin.md` on macOS, `handoff/work-linux.md` on Linux.
+3. The runbook you were asked to follow: `handoff/work-darwin.md` on macOS,
+   `handoff/work-linux.md` on Linux for first setup, or a task-specific one such as
+   `handoff/work-linux-rekey.md`.
 
 ## The rules
 
@@ -16,8 +18,9 @@ repo, and everything you have to say goes back as a commit on your own branch.
   (`bin/handoff branch` puts you there). The author reviews and merges it at home.
 - **Never use `git push --force`, `git reset --hard`, `git stash drop`, `git clean`,
   or `--no-verify`.** If a hook blocks a commit, stop and report what it blocked.
-- **Never delete or overwrite a file outside the repo.** `script/setup` only adds;
-  if it reports a file it left alone, list it in the report and move on.
+- **Never delete or overwrite a file outside the repo**, unless a runbook step names
+  the exact file and says so. `script/setup` only adds; if it reports a file it left
+  alone, list it in the report and move on.
 - **Follow the runbook's steps in order.** Every step has a command, what to expect,
   and a test. Do not improvise a fix outside the runbook.
 - **Report everything you decided.** The decision table below covers the likely
