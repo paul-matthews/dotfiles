@@ -175,3 +175,10 @@ export NVM_DIR="$HOME/.nvm"
 if [[ "$TERM_PROGRAM" == "iTerm.app" && -f "$ZSH/iterm/iterm2_shell_integration.zsh" ]]; then
   source "$ZSH/iterm/iterm2_shell_integration.zsh"
 fi
+
+# bun completions
+[ -s "/Users/paulmatthews/.bun/_bun" ] && source "/Users/paulmatthews/.bun/_bun"
+
+# bun
+export BUN_INSTALL="$HOME/.bun"
+export PATH="$BUN_INSTALL/bin:$PATH"
