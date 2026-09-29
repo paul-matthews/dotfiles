@@ -81,7 +81,7 @@ These were removed during the audit: `ruby/`, `sublime/`, `xcode/`. The `vendor/
 
 ## New machine setup reminder
 
-When Paul mentions setting up a new machine or syncing dotfiles to another device, remind him to check the manual steps in README.md (e.g., setting iTerm2 font to MesloLGS Nerd Font).
+A new machine is `git clone` plus `script/setup --profile home|work`; an existing one is `gsp` then `reload!` (see README). There are no manual steps: the iTerm font comes from the "Dotfiles Default" dynamic profile (restart iTerm once). Work machines with no human at the keyboard follow `handoff/`. Two things live outside the repo and are needed on a home Mac for the Claude hooks: the `~/.config/iterm2/cc-status` binary and the GSD plugin's `~/.claude/hooks/*.js`; without them the hooks in `claude/hooks.json` fail quietly.
 
 ## Testing changes
 
