@@ -37,6 +37,7 @@ repo, and everything you have to say goes back as a commit on your own branch.
 | A test fails | Stop at that step; capture the command and its output; report. Do not attempt a fix |
 | A step is already done | Note it as done and continue (everything is idempotent) |
 | The pre-commit hook blocks a commit | Stop; report what it blocked; never `--no-verify` |
+| A tool the runbook expects as `function` is `none` | It is not installed here: `whence -w` only reports wrappers for tools that exist. Say so in the report. Never add an alias to `~/.localrc` to make a check pass; shared definitions belong in the secrets file, scoped with `dotfiles_has_tag` |
 | Anything the runbook does not cover | Stop; describe it; commit; push |
 
 ## How to report

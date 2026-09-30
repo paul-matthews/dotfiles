@@ -83,10 +83,14 @@ bin/handoff capture "TERM=xterm-256color zsh -ic 'echo PROFILE=\$DOTFILES_PROFIL
 bin/handoff capture "TERM=xterm-256color zsh -ic 'whence -v jc; grep -n \"alias jc\" ~/.localrc ~/.localrc.secrets ~/.zlogin ~/.zshenv ~/.zprofile ~/.zshrc.local /etc/zshrc /etc/zprofile 2>/dev/null'"
 ```
 
-Expect: `PROFILE=work TAGS=work darwin`, `PROJECTS=/Users/<you>/src`, `jc: function`,
+Expect: `PROFILE=work TAGS=work darwin`, `PROJECTS=/Users/<you>/src`,
 `jetski: function`, and `gandalf_prompt_precmd: function` only if Gandalf is installed.
-The second command shows where `jc` is defined; capture it whatever it says. If your repos do not
-live in `~/src`, say so in the report: `PROJECTS` will need a work override.
+`jc` is `alias` until step 7 has been done on one work Mac, then `function`; `none`
+means it is defined nowhere on this machine, which step 7 will also show. A wrapper
+is only defined for a tool that exists here, so `none` for any of these means "not
+installed", never "not wired up". The second command shows where `jc` is defined;
+capture it whatever it says. If your repos do not live in `~/src`, say so in the
+report: `PROJECTS` will need a work override.
 
 ## 6. Report
 
@@ -99,6 +103,44 @@ bin/handoff commit
 
 On a later run, when your key is already a recipient, step 3 decrypts secrets and
 the result line is `bin/handoff result "done" "nothing"`.
+
+## 7. Move `jc` into the shared secrets (once secrets decrypt here)
+
+`jc` has only ever lived in this machine's untracked `~/.localrc`. It belongs in
+the shared secrets file, scoped to work machines, so every work machine gets it.
+Skip this step entirely if `bin/secrets status` does not say `state: in sync`.
+
+```sh
+bin/handoff capture "grep -n '^alias jc=' ~/.localrc; grep -c 'alias jc=' ~/.localrc.secrets"
+```
+
+Expect: one line from `~/.localrc`, then a count. If the count is `0`, publish it.
+The block goes at the end of the file; `alias jc` prints `jc='…'` already quoted:
+
+```sh
+cat >> ~/.localrc.secrets <<EOF
+if dotfiles_has_tag work; then
+  alias $(alias jc)
+fi
+EOF
+bin/secrets push
+git add secrets.sops.yaml && git commit -m "secrets: jc alias for work machines"
+```
+
+Expect: `encrypted ... for N recipient(s); commit it`. If `secrets push` is refused
+because the repo file changed, stop and report; never `--force`. If the count was
+already `1` or more, another work Mac has published it: skip the block above.
+
+Either way, remove this machine's private copy. This names the one file and the one
+line the README rule allows:
+
+```sh
+sed -i '' '/^alias jc=/d' ~/.localrc
+bin/handoff capture "TERM=xterm-256color zsh -ic 'whence -w jc jetski; whence -v jc'"
+```
+
+Expect: `jc: function`, `jetski: function`, and `whence -v` showing a shell function
+(the AI-tab wrapper around the alias). Then report as in step 6 with `"done" "nothing"`.
 
 If you stopped early: `bin/handoff result "stopped at step N" "<what happened>"`, then
 `report` and `commit` exactly the same way.

@@ -85,12 +85,39 @@ bin/handoff capture "script/test"
 
 Expect: `recipient: yes`, `state: in sync` (`gsp` pulls secrets after a pull),
 and `script/test` ending in `PASS`. Only then remove the shared key copies. This
-is the one deletion this runbook allows, of exactly these two files:
+is the one deletion of key files this runbook allows, of exactly these two files:
 
 ```sh
 rm ~/.config/sops/age/keys.shared.txt ~/.age/key.shared.txt
 bin/handoff capture "ls -la ~/.age ~/.config/sops/age"
+```
+
+Then the temporary `jc` alias added to `~/.localrc` on the first run. The shared
+secrets now carry `jc` for work machines once a work Mac has published it, so:
+
+```sh
+bin/handoff capture "grep -c 'alias jc=' ~/.localrc.secrets; grep -n '^alias jc=' ~/.localrc"
+```
+
+If the first number is `1` or more, delete the private copy (this names the one
+file and line allowed) and check the shared one took over:
+
+```sh
+sed -i '/^alias jc=/d' ~/.localrc
+bin/handoff capture "TERM=xterm-256color zsh -ic 'whence -w jc jetski'"
 bin/handoff result "done" "nothing"
+```
+
+Expect `jc: function` and `jetski: function`. If the first number was `0`, leave
+`~/.localrc` alone and instead:
+
+```sh
+bin/handoff result "done" "remove the temporary jc alias from ~/.localrc once a work Mac has published jc into secrets"
+```
+
+Then, either way:
+
+```sh
 bin/handoff report
 bin/handoff commit
 ```
