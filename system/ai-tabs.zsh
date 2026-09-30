@@ -31,7 +31,9 @@ _ai_tab_wrap() {
 
 # Commands to wrap, as name:BADGE. Work machines append to this in ai-tabs.work.zsh.
 # _ai_tabs_finalize (called at the end of zshrc) defines a wrapper function for
-# each name, converting an alias of that name if ~/.localrc defined one.
+# each name that is installed here, converting an alias of that name if
+# ~/.localrc or ~/.localrc.secrets defined one. A name that is neither is left
+# undefined.
 #   claude  Claude Code
 #   agy     Antigravity CLI (the public one, installed to ~/.local/bin)
 typeset -gaU _AI_TAB_CMDS
@@ -88,9 +90,12 @@ _ai_tabs_finalize() {
       expansion="${aliases[$name]}"
       unalias "$name"
       eval "$name() { _ai_tab_run ${(q)expansion} ${(q)badge} \"\$@\"; }"
-    elif ! (( ${+functions[$name]} )); then
+    elif ! (( ${+functions[$name]} )) && (( ${+commands[$name]} )); then
       eval "$name() { _ai_tab_wrap ${(q)name} ${(q)badge} \"\$@\"; }"
     fi
+    # A registered name that is neither an alias nor on PATH gets no wrapper,
+    # so `whence -w` tells the truth about a tool that is not installed here.
+    # A tool installed mid-session is wrapped at the next shell.
   done
 }
 

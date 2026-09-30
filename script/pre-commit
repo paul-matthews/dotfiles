@@ -48,14 +48,16 @@ while IFS= read -r f; do
 done <<<"$staged_files"
 
 # 4. Values from this machine's decrypted secrets
-if [[ -r "$HOME/.localrc.secrets" ]]; then
+#    Assignments may sit indented inside `if dotfiles_has_tag ...` blocks.
+SECRETS_DEC="${SECRETS_DEC:-$HOME/.localrc.secrets}"
+if [[ -r "$SECRETS_DEC" ]]; then
   while IFS= read -r val; do
     [[ ${#val} -lt 6 ]] && continue
     if grep -qF -- "$val" <<<"$staged_added"; then
       block "staged content contains a value from ~/.localrc.secrets"
       break
     fi
-  done < <(sed -nE "s/^(export |alias )?[A-Za-z_][A-Za-z0-9_]*=['\"]?([^'\"]+)['\"]?[[:space:]]*$/\2/p" "$HOME/.localrc.secrets")
+  done < <(sed -nE "s/^[[:space:]]*(export |alias )?[A-Za-z_][A-Za-z0-9_]*=['\"]?([^'\"]+)['\"]?[[:space:]]*$/\2/p" "$SECRETS_DEC")
 fi
 
 if [[ $fail -ne 0 ]]; then

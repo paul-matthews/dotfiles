@@ -4,7 +4,7 @@
 Shell secrets (exports, aliases, real paths) shared by every machine, encrypted in the repo.
 
 - **Pull (decrypt):** `secrets-pull` → `~/.localrc.secrets` (mode 600, sourced by zshrc)
-- **Edit:** `~/.localrc.secrets` in plain text (never committed)
+- **Edit:** `~/.localrc.secrets` in plain text (never committed). One file for all machines: wrap machine-specific lines in `if dotfiles_has_tag work; then … fi` (home, work, darwin, linux, pi) and pick tool paths by existence
 - **Push (encrypt):** `secrets-push` → `secrets.sops.yaml`, then commit. Refused if another machine pushed since your last pull: pull, merge by hand, push again
 - **Status:** `secrets-status` (key, recipients, in sync?)
 

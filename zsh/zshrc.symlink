@@ -57,6 +57,13 @@ fi
 # Machine tags (DOTFILES_PROFILE, DOTFILES_TAGS) and the tag-aware topic loader
 # live in zsh/loader.zsh. If that file fails to load, fall back to the plain
 # glob loader so a shell always comes up. DOTFILES_SAFE=1 skips topic files.
+#
+# dotfiles_has_tag <tag> is true when this machine carries the tag. It is
+# defined here, not in the loader, so it exists even if the loader failed and
+# so ~/.localrc.secrets and ~/.localrc can scope lines to a machine:
+#   if dotfiles_has_tag work; then ...; fi
+dotfiles_has_tag() { [[ " ${DOTFILES_TAGS:-} " == *" $1 "* ]]; }
+
 if ! source "$ZSH/zsh/loader.zsh" 2>/dev/null; then
   print -u2 "dotfiles: zsh/loader.zsh failed to load, using the plain loader (check: zsh -n $ZSH/zsh/loader.zsh)"
   if [[ -z "${DOTFILES_SAFE:-}" ]]; then
