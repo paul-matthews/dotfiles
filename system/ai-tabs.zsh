@@ -1,6 +1,7 @@
 # AI-tool tabs: wrap a CLI so its tab takes the project's colour, darkened,
-# with a "🤖" title and a badge naming the tool, then restores the project tab
-# when the tool exits. The wrapper never parses arguments; "$@" passes through.
+# with a "🤖" title while preserving the project and role badge, then restores
+# the project tab when the tool exits. The wrapper never parses arguments;
+# "$@" passes through.
 #
 # Shared: claude, agy. Work machines add jc and jetski in system/ai-tabs.work.zsh.
 # Add another tool by appending name:BADGE to _AI_TAB_CMDS.
@@ -19,7 +20,7 @@ _ai_tab_wrap() {
   [[ -n "${TERMINAL_ROLE:-}" ]] && label="$label / $TERMINAL_ROLE"
   set_tab_color ${=rgb}
   set_tab_title "🤖 $label"
-  set_badge "$badge"
+  set_badge "$label"
 
   command "$name" "$@"
   local rc=$?
@@ -63,7 +64,7 @@ _ai_tab_wrap_expansion() {
   [[ -n "${TERMINAL_ROLE:-}" ]] && label="$label / $TERMINAL_ROLE"
   set_tab_color ${=rgb}
   set_tab_title "🤖 $label"
-  set_badge "$badge"
+  set_badge "$label"
 
   eval "$expansion" '"$@"'
   local rc=$?
