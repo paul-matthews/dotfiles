@@ -37,7 +37,7 @@ print -r -- "PROJECTS=$PROJECTS"
 print -r -- "PATH=$PATH"
 print -r -- "DOTFILES_PROFILE=$DOTFILES_PROFILE"
 print -r -- "DOTFILES_TAGS=$DOTFILES_TAGS"
-for f in tabcolor gwa cpush role reload! gsp gandalf_prompt_precmd claude agy _tabcolor_preset_for; do
+for f in tabcolor gwa cpush role reload! gsp gandalf_prompt_precmd _git_configure_work_hosts claude agy _tabcolor_preset_for; do
   print -r -- "WHENCE:$f=$(whence -w $f 2>/dev/null)"
 done
 print -r -- "PRESET_COSMIC=$(TABCOLOR_PRESET= _tabcolor_preset_for $HOME/src/pico/cosmic-clock 2>/dev/null)"
@@ -155,8 +155,12 @@ fi
 if [[ "$expected_profile" == "home" ]]; then
   v="$(whence_kind main gandalf_prompt_precmd)"
   [[ -z "$v" ]] && ok "work-only gandalf hook is not loaded on a home profile" || bad "gandalf hook loaded on a home profile"
+  v="$(whence_kind main _git_configure_work_hosts)"
+  [[ -z "$v" ]] && ok "work-only git config helper is not loaded on a home profile" || bad "work git config helper loaded on a home profile"
 else
   skp "gandalf hook absent" "work profile"
+  v="$(whence_kind main _git_configure_work_hosts)"
+  [[ "$v" == "function" ]] && ok "_git_configure_work_hosts is a function on a work profile" || bad "_git_configure_work_hosts is '${v:-missing}', expected function"
 fi
 
 #------------------------------------------------------------------------------
@@ -262,6 +266,42 @@ for f in bin/git-safe-pull bin/gsp-verify script/test-gsp; do
   bash -n "$DOTFILES_ROOT/$f" 2>"$tmp/syn" || { syntax_bad=1; printf '      %s: %s\n' "$f" "$(head -1 "$tmp/syn")"; }
 done
 [[ $syntax_bad -eq 0 ]] && ok "gsp bash scripts parse" || bad "gsp bash syntax errors above"
+
+# Work git config helper: overrides user.email on matching work remotes (https,
+# sso, ssh, and both single- and multi-segment git@host:... paths) while leaving
+# GitHub remotes on the personal email from ~/.gitconfig.local.
+(
+  gwhome="$tmp/gitwork"
+  mkdir -p "$gwhome"
+  ln -s "$DOTFILES_ROOT/git/gitconfig.symlink" "$gwhome/.gitconfig"
+  printf '[user]\n\tname = Test\n\temail = personal@example.com\n' > "$gwhome/.gitconfig.local"
+  HOME="$gwhome" zsh -c 'source "$1/git/config.work.zsh" && _git_configure_work_hosts "corp@work.example" "work.example" "corp.work.example"' _ "$DOTFILES_ROOT"
+  for spec in \
+    "https://work.example/org/repo.git:corp@work.example" \
+    "sso://work.example/org/repo:corp@work.example" \
+    "ssh://git@work.example/org/repo.git:corp@work.example" \
+    "git@work.example:repo.git:corp@work.example" \
+    "git@work.example:org/repo.git:corp@work.example" \
+    "https://corp.work.example/org/repo.git:corp@work.example" \
+    "git@github.com:user/repo.git:personal@example.com"; do
+    url="${spec%:*}"; want="${spec##*:}"
+    rm -rf "$gwhome/repo" && git init -q "$gwhome/repo"
+    git -C "$gwhome/repo" remote add origin "$url"
+    got="$(HOME="$gwhome" GIT_CONFIG_GLOBAL="$gwhome/.gitconfig" git -C "$gwhome/repo" config user.email)"
+    [[ "$got" == "$want" ]] || exit 1
+  done
+) && ok "_git_configure_work_hosts overrides user.email only for matching work remotes" \
+  || bad "_git_configure_work_hosts failed remote URL matching check"
+
+if [[ "$expected_profile" == "work" && -f "$HOME/.gitconfig.work.user" ]]; then
+  work_email="$(git config -f "$HOME/.gitconfig.work.user" user.email 2>/dev/null)"
+  dotfiles_email="$(git -C "$DOTFILES_ROOT" config user.email 2>/dev/null)"
+  if [[ -n "$work_email" && "$dotfiles_email" != "$work_email" ]]; then
+    ok "dotfiles repo keeps personal git email ($dotfiles_email) on a work machine"
+  else
+    bad "dotfiles repo resolved to work git email '$dotfiles_email'"
+  fi
+fi
 
 #------------------------------------------------------------------------------
 # 7. Bootstrap is idempotent on a configured machine

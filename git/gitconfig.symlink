@@ -3,6 +3,8 @@
 # Local/private config goes in the include
 [include]
         path = ~/.gitconfig.local
+[include]
+        path = ~/.gitconfig.work
 [gpg]
         format = ssh
 [user]

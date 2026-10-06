@@ -24,6 +24,7 @@ A file is sourced only if every tag in its name is one of this machine's tags. `
 - `system/tabcolor.zsh` — iTerm2 tab color system with per-PID rotation
 - `system/_path.zsh` — PATH setup (underscore prefix = loads first alphabetically)
 - `git/aliases.zsh` — shell aliases (gs, gl, gpl, gp, gac, etc.)
+- `git/config.work.zsh` — `_git_configure_work_hosts` helper (work tag only); writes `~/.gitconfig.work` and `~/.gitconfig.work.user` from secrets so work remotes use the corporate email
 - `git/worktree.zsh` — worktree helpers (gwa, gwc, gwj, gwm, gwr, gwp)
 - `cosmic/aliases.zsh` — cosmic-clock project commands (cpush, cbuild, ctime, etc.)
 - `zsh/loader.zsh` — machine tags and the tag-aware topic loader
@@ -79,6 +80,7 @@ iTerm keeps exactly one dynamic profile, `iterm/DynamicProfiles/dotfiles-default
 - Pager: delta (side-by-side, line numbers)
 - rerere: enabled (remembers conflict resolutions)
 - Signing: SSH format with Ed25519 key
+- Work identity: `git/gitconfig.symlink` includes `~/.gitconfig.work` after `~/.gitconfig.local`; on work machines, `_git_configure_work_hosts` (called from `~/.localrc.secrets`) writes `hasconfig:remote.*.url:` rules pointing to `~/.gitconfig.work.user` so corporate remotes use the work email while GitHub repos keep the personal email
 
 ## Stale/removed topics
 
@@ -97,7 +99,7 @@ Run `script/test`. It starts a fresh interactive zsh under a pseudo-terminal and
 3. `PATH` contains neither `./bin` nor `/Users/holman/`
 4. `DOTFILES_PROFILE` matches `~/.dotfiles-profile` and `DOTFILES_TAGS` carries the profile and OS; work-only files stay unloaded on a home profile
 5. topic functions are defined: `tabcolor`, `gwa`, `cpush`, `role`, and the `reload!` and `gsp` aliases; every registered AI tool is a wrapper function when installed and undefined when not; `dotfiles_has_tag` answers correctly, also under `DOTFILES_SAFE=1`, which otherwise gives a shell with none of them
-6. no references to the old `Code` projects directory remain, `bin/` is not gitignored, every tracked zsh file parses, and files removed by a phase stay gone
+6. no references to the old `Code` projects directory remain, `bin/` is not gitignored, every tracked zsh file parses, files removed by a phase stay gone, and `_git_configure_work_hosts` overrides `user.email` only on matching work remotes while keeping the personal email on GitHub repos
 7. `script/bootstrap --dry-run` has nothing left to do, and the pre-commit hook is installed and blocks a private key and a value from an indented line of the secrets file
 8. secrets are decrypted and in sync, and `secrets push` refuses to overwrite a repo file that changed since the last pull
 
