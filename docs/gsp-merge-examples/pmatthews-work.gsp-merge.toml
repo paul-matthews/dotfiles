@@ -1,0 +1,20 @@
+# pmatthews-work.gsp-merge.toml
+# Auto-merge configuration for Obsidian vault (pmatthews-work).
+# Checked against /Users/pmatthews/Documents/Obsidian/pmatthews-work.
+# Formats verified across vault:
+#   last_modified: "2026-10-05T19:40:34.302250+00:00"
+#   last_modified_env: "pmatthews-ctop"
+# No other frontmatter fields are auto-updated by sync/pre-commit scripts.
+
+version = 1
+auto = true
+verify_skip = ["**/*.md"]
+
+[[rule]]
+name = "last-modified"
+files = ["**/*.md"]
+line = '^\s*last_modified:\s*"(?P<value>[^"]+)"\s*$'
+type = "timestamp"
+strategy = "latest"
+frontmatter_only = true
+coupled = ['^\s*last_modified_env:\s*"(?P<value>[^"]+)"\s*$']

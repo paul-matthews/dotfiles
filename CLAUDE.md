@@ -31,7 +31,8 @@ A file is sourced only if every tag in its name is one of this machine's tags. `
 - `script/pre-commit` — installed as the repo's git hook; blocks private keys, unencrypted secrets files and values from `~/.localrc.secrets`
 - `script/setup` — the one command for a new or existing machine: bootstrap, install, bootstrap again (secrets), test
 - `bin/handoff` + `handoff/` — runbooks and reporting helpers for work machines driven by an agent with no chat channel; they commit to `from/<machine-id>`, never master, and reports are SOPS-encrypted. Keep the runbooks in step with any bootstrap or setup change
-- `script/test` — starts a fresh interactive zsh in a pseudo-terminal and checks the promises below; `gsp` runs it after every pull
+- `script/test` — starts a fresh interactive zsh in a pseudo-terminal and checks the promises below; `gsp` verifies against it (cache-aware)
+- `script/test-gsp` — scenario test harness for `gsp` auto-merge in throwaway repos (not run by `gsp`)
 - `script/install` — packages: `brew bundle` on the core `Brewfile` then `Brewfile.<profile>` (`Brewfile.home` / `Brewfile.work`) on macOS; `linux/packages.txt` plus `linux/packages.pi.txt` via apt on any apt-based Linux (`name|fallback` per line); then every `*/install.sh`
 - `bin/secrets` — SOPS + age secrets shared across machines: `pull`, `push`, `status`, `keygen`, `add-recipient`; aliased as `secrets-pull` etc.
 - `bin/cheat` — colored cheatsheet script (run `cheat` to view)
@@ -56,7 +57,11 @@ Antigen is wrapped in `if [[ -z "$_ANTIGEN_LOADED" ]]` to prevent prompt breakag
 - **EDITOR is vim** — set in both `editors/env.zsh` and `zsh/zshrc.symlink`
 - **No `./bin` in PATH** — removed for security. Use explicit `./bin/something` for project-local scripts
 - **Secrets live in `secrets.sops.yaml`**, encrypted with age to one key per machine (recipients in `.sops.yaml`). `secrets-pull` decrypts to `~/.localrc.secrets` (mode 600), which zshrc sources; `secrets-push` re-encrypts and refuses if another machine pushed since your last pull, because encrypted files cannot be merged. Bootstrap generates a machine's key at `~/.config/sops/age/keys.txt` and prints the public key; a machine that can decrypt adds it with `secrets add-recipient`. Anything not for a public repo (tokens, work-internal names, real paths) goes here, as exports or aliases. It is one file for every machine, so scope machine-specific lines inside it with `if dotfiles_has_tag work; then … fi` (tags: home, work, darwin, linux, pi; the helper is defined in zshrc before the loader) and pick tool paths by existence, never by tag. Nothing shared belongs in the untracked `~/.localrc`; that file is for one-machine oddities only
-- **`gsp` is a verified pull** — after fetching and rebasing it runs `script/test` and rolls back to the previous head if the test fails, so a bad commit can never strand a machine. `GSP_NO_VERIFY=1` skips it in an emergency
+- **`gsp` is a verified pull & push** — syncs with upstream and pushes by default (`--no-push` / `GSP_NO_PUSH=1` to opt out) when local commits are ahead:
+  - **Auto-resolution:** when diverged with conflicts, auto-resolves declared trivial conflicts matching rules in a committed `.gsp-merge.toml` (template at `git/gsp-merge.toml.example`; init with `git-meta-resolve init`, validate with `git-meta-resolve check-config`). An in-memory merge commit is created if 100% of conflicting lines match rules; consent is given via `--auto-resolve`, `GSP_AUTO_RESOLVE=1`, or `auto = true` in config (interactive Y/n prompt otherwise; `--no-resolve` disables). Undeclared conflicts roll back untouched.
+  - **Verify cache:** runs `script/test` via `bin/gsp-verify` using a tree-keyed cache (`--verify` forces re-verification, `--no-verify` / `GSP_NO_VERIFY=1` skips).
+  - **Exit codes:** 0 (synced and pushed), 1 (aborted or rolled back, nothing changed), 2 (usage/config error), 3 (synced locally, push failed; auto-resolved merge parked at `refs/gsp/unpushed/*`), 4 (credentials locked without TTY, nothing changed).
+  - **Recovery:** pre-mutation backup refs are stored at `refs/gsp/backup/<id>/head` and `refs/gsp/backup/<id>/stash`. Rollback prints the recovery command: `git reset --hard refs/gsp/backup/<id>/head && git stash apply refs/gsp/backup/<id>/stash`.
 
 ## Tab colour system
 
@@ -96,4 +101,4 @@ Run `script/test`. It starts a fresh interactive zsh under a pseudo-terminal and
 7. `script/bootstrap --dry-run` has nothing left to do, and the pre-commit hook is installed and blocks a private key and a value from an indented line of the secrets file
 8. secrets are decrypted and in sync, and `secrets push` refuses to overwrite a repo file that changed since the last pull
 
-`gsp` runs the same script after every pull. Add a check whenever a change makes a new promise.
+`gsp` verifies with the same script after every pull (using the verify cache). `script/test-gsp` is a separate scenario harness for gsp auto-merge (not run by gsp). Add a check whenever a change makes a new promise.

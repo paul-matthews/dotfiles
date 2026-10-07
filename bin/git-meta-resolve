@@ -1,0 +1,15 @@
+#!/usr/bin/env python3
+"""git-meta-resolve: resolve well-known trivial merge conflicts (version codes,
+semver, frontmatter timestamps) declared in a repo's .gsp-merge.toml.
+
+See docs/gsp-merge-contract.md. Used by gsp (bin/git-safe-pull).
+"""
+import os
+import sys
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.realpath(__file__))), "git"))
+
+from gsp_merge.cli import main  # noqa: E402
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

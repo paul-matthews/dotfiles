@@ -1,0 +1,10 @@
+package main
+
+const (
+	EnvoyVersion     = "1.0.0"
+	EnvoyVersionCode = 116
+)
+
+func hello() string {
+	return "hi"
+}

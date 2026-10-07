@@ -1,0 +1,140 @@
+# .gsp-merge.toml.example - Template configuration for gsp auto-merge
+#
+# Copy this file to `.gsp-merge.toml` at your repository root to configure
+# automatic conflict resolution for trivial, well-defined merge conflicts
+# during `gsp` (git-safe-pull).
+#
+# ------------------------------------------------------------------------------
+# SAFETY MODEL
+# ------------------------------------------------------------------------------
+# 1. Whitelist-only: gsp resolves ONLY conflicts where EVERY conflicting line in
+#    the file matches a declared rule or group. If a single line or hunk does not
+#    match, or if structural conflicts exist (e.g., delete/modify), the merge
+#    aborts cleanly with no changes applied to your worktree or branch.
+# 2. Local rules dictate merges: Rules are ALWAYS read from your working tree at
+#    PRE_HEAD (the local side before pulling). Remote incoming commits cannot
+#    introduce or alter the rules that evaluate them.
+# 3. In-memory resolution: Candidate merges are evaluated in-memory before any
+#    branch reference or working file is updated.
+#
+# ------------------------------------------------------------------------------
+# CONFIGURATION SCHEMA
+# ------------------------------------------------------------------------------
+# Top-level settings:
+#   version:      (integer, required) Schema version. Must be 1.
+#   auto:         (boolean, optional, default false) When true, allows gsp to
+#                 apply auto-resolutions without an interactive TTY confirmation.
+#   verify_skip:  (list of globs, optional, default []) If EVERY path changed by
+#                 the pull matches one of these globs, `script/test` is skipped.
+#
+# Rules ([[rule]]):
+#   name:             (string, required) Unique identifier ([a-z0-9-]+) across
+#                     all rules and groups.
+#   files:            (list of globs, required) Non-empty list of path globs.
+#                     Matched using Python pathlib.PurePosixPath.full_match.
+#   line:             (string, required) Python regex matching the conflict line.
+#                     Must contain exactly one named capture group: (?P<value>...).
+#                     All non-value characters must match between ours, base, and theirs.
+#   type:             (string, required) Data type of the value. One of:
+#                       - "counter": Non-negative decimal integers.
+#                         Strategies:
+#                           - "max" (default): max(ours, theirs).
+#                           - "max_unique": max(ours, theirs) + 1.
+#                       - "semver": Semantic Version 2.0.0 (MAJOR.MINOR.PATCH[-pre][+build]).
+#                         Strategies:
+#                           - "max" (default): Higher SemVer precedence wins.
+#                             Build metadata ignored for ordering. On tie, keeps ours.
+#                       - "timestamp": ISO-8601 with timezone offset (datetime.fromisoformat).
+#                         Strategies:
+#                           - "latest" (default): More recent instant wins.
+#   strategy:         (string, optional) Strategy name. Defaults to the type default.
+#   frontmatter_only: (boolean, optional, default false) When true, matches only
+#                     within the leading YAML frontmatter block (between `---` lines).
+#   coupled:          (list of regexes, optional, timestamp only) Regexes (each with
+#                     a (?P<value>...) group) whose values follow the timestamp winner.
+#
+# Groups ([[group]]):
+#   Composite multi-line fields (e.g. split SemVer properties).
+#   name:             (string, required) Unique identifier ([a-z0-9-]+).
+#   files:            (list of globs, required) Non-empty list of path globs.
+#   type:             (string, required) Must be "semver_split".
+#   strategy:         (string, optional, default "max") Compares (major, minor, patch)
+#                     tuple as integers.
+#   major:            (string, required) Regex with (?P<value>\d+) for major version.
+#   minor:            (string, required) Regex with (?P<value>\d+) for minor version.
+#   patch:            (string, required) Regex with (?P<value>\d+) for patch version.
+#   frontmatter_only: (boolean, optional, default false)
+
+# As shipped, this configuration is empty but valid:
+version = 1
+
+# Optional top-level settings:
+# auto = false
+# verify_skip = ["**/*.md"]
+
+# ------------------------------------------------------------------------------
+# EXAMPLE 1: Go const version code + semver (e.g. Envoy)
+# ------------------------------------------------------------------------------
+# In Go source files (cmd/envoy/version.go):
+#   const EnvoyVersionCode = 116
+#   const EnvoyVersion     = "1.0.0"
+#
+# [[rule]]
+# name = "envoy-version-code"
+# files = ["**/version.go"]
+# line = '^\s*EnvoyVersionCode\s*=\s*(?P<value>\d+)\s*$'
+# type = "counter"
+# strategy = "max"
+#
+# [[rule]]
+# name = "envoy-version"
+# files = ["**/version.go"]
+# line = '^\s*EnvoyVersion\s*=\s*"(?P<value>[^"]+)"\s*$'
+# type = "semver"
+# strategy = "max"
+
+# ------------------------------------------------------------------------------
+# EXAMPLE 2: Java / Gradle properties (e.g. Gandalf)
+# ------------------------------------------------------------------------------
+# In version.properties:
+#   version.build=42
+#   version.major=2
+#   version.minor=1
+#   version.patch=0
+#
+# [[rule]]
+# name = "build"
+# files = ["version.properties"]
+# line = '^version\.build=(?P<value>\d+)$'
+# type = "counter"
+# strategy = "max"
+#
+# [[group]]
+# name = "semver"
+# files = ["version.properties"]
+# type = "semver_split"
+# strategy = "max"
+# major = '^version\.major=(?P<value>\d+)$'
+# minor = '^version\.minor=(?P<value>\d+)$'
+# patch = '^version\.patch=(?P<value>\d+)$'
+
+# ------------------------------------------------------------------------------
+# EXAMPLE 3: Obsidian YAML frontmatter timestamps with coupled environment
+# ------------------------------------------------------------------------------
+# In Markdown notes (e.g. Daily Notes):
+#   ---
+#   last_modified: "2026-10-01T12:29:54.934517+01:00"
+#   last_modified_env: "pmatthews-mac"
+#   ---
+#
+# auto = true
+# verify_skip = ["**/*.md"]
+#
+# [[rule]]
+# name = "last-modified"
+# files = ["**/*.md"]
+# frontmatter_only = true
+# line = '^last_modified:\s*"(?P<value>[^"]+)"$'
+# type = "timestamp"
+# strategy = "latest"
+# coupled = ['^last_modified_env:\s*"(?P<value>[^"]+)"$']

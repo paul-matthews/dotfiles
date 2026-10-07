@@ -1,0 +1,10 @@
+version = 1
+auto = true
+verify_skip = ["**/*.md"]
+[[rule]]
+name = "last-modified"
+files = ["**/*.md"]
+frontmatter_only = true
+line = '^last_modified:\s*"(?P<value>[^"]+)"$'
+type = "timestamp"
+coupled = ['^last_modified_env:\s*"(?P<value>[^"]+)"$']

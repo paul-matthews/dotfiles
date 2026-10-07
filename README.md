@@ -52,7 +52,7 @@ One command per machine, idempotent, re-run whenever you like:
 | Situation | Steps |
 | --- | --- |
 | New Mac, Pi or Linux box | `git clone git@github.com:paul-matthews/dotfiles.git ~/src/system/dotfiles && ln -s ~/src/system/dotfiles ~/.dotfiles`, then `script/setup --profile home` (or `work`) |
-| Existing machine after a change | `gsp` in the dotfiles directory (a verified pull: it runs `script/test` and rolls back on failure), then `reload!`; `script/setup --profile X` once if bootstrap gained a step |
+| Existing machine after a change | `gsp` in the dotfiles directory (verified pull & push: auto-resolves declared trivial conflicts, runs cached `script/test`, pushes if ahead, rolls back on failure), then `reload!`; `script/setup --profile X` once if bootstrap gained a step |
 | Adding a machine to secrets | It prints its public age key during setup; on a machine that can already decrypt: `secrets add-recipient age1...`, commit, push |
 | Work machine with no human at the keyboard | See `handoff/README.md`; the agent follows a runbook and reports by commit on `from/<machine-id>` |
 
@@ -61,6 +61,15 @@ One command per machine, idempotent, re-run whenever you like:
 and `script/test`. There are no manual steps afterwards: iTerm's font comes from
 the "Dotfiles Default" dynamic profile that bootstrap makes the default (restart
 iTerm once).
+
+### safe pull (gsp)
+
+`gsp` (`bin/git-safe-pull`) synchronises your branch and pushes by default when ahead (`--no-push` opts out):
+- **Auto-resolution:** Resolves declared trivial conflicts in-memory using rules in `.gsp-merge.toml` (template: `git/gsp-merge.toml.example`; init via `git-meta-resolve init`, validate via `git-meta-resolve check-config`). Requires consent (`--auto-resolve` / `GSP_AUTO_RESOLVE=1` / `auto = true` in config; prompts Y/n interactively; `--no-resolve` disables). Undeclared conflicts abort untouched.
+- **Verification:** Runs `script/test` via `bin/gsp-verify` with a tree-keyed cache (`--verify` forces rerun, `--no-verify` skips).
+- **Exit codes:** `0` synced/pushed · `1` aborted/rolled back (untouched) · `2` config/usage error · `3` synced locally, push failed (auto-resolution parked at `refs/gsp/unpushed/*`) · `4` credentials locked without TTY (untouched).
+- **Recovery:** Backup refs saved before changes; rollback prints: `git reset --hard refs/gsp/backup/<id>/head && git stash apply refs/gsp/backup/<id>/stash`.
+- **Harness:** `script/test-gsp` is the scenario test harness (not run by `gsp`).
 
 ## bugs
 

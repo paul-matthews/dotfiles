@@ -248,6 +248,21 @@ for f in "${absent[@]}"; do
   [[ -e "$DOTFILES_ROOT/$f" ]] && bad "$f should have been removed" || ok "$f is gone"
 done
 
+# gsp merge resolver: strategies + fixtures (fast; the full scenario harness is
+# script/test-gsp and is deliberately not run here, to keep gsp's verify quick)
+if out="$("$DOTFILES_ROOT/bin/git-meta-resolve" self-test 2>&1)"; then
+  ok "git-meta-resolve self-test ($(tail -1 <<<"$out"))"
+else
+  bad "git-meta-resolve self-test failed:"; sed 's/^/      /' <<<"$out" | head -20
+fi
+"$DOTFILES_ROOT/bin/git-meta-resolve" check-config "$DOTFILES_ROOT/git/gsp-merge.toml.example" >/dev/null 2>&1 \
+  && ok "gsp-merge.toml.example template is a valid config" || bad "gsp-merge.toml.example does not validate"
+syntax_bad=0
+for f in bin/git-safe-pull bin/gsp-verify script/test-gsp; do
+  bash -n "$DOTFILES_ROOT/$f" 2>"$tmp/syn" || { syntax_bad=1; printf '      %s: %s\n' "$f" "$(head -1 "$tmp/syn")"; }
+done
+[[ $syntax_bad -eq 0 ]] && ok "gsp bash scripts parse" || bad "gsp bash syntax errors above"
+
 #------------------------------------------------------------------------------
 # 7. Bootstrap is idempotent on a configured machine
 #------------------------------------------------------------------------------

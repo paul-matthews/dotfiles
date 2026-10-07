@@ -19,8 +19,19 @@ Tab colour, title and badge follow the project: `.envrc` preset first, else the 
 - `role device` → tab reads `🪐 COS / device`; `role` clears; `role -s` shows (`rgit`, `rbuild`, `rdevice`, `rclear`)
 - `claude` / `agy` (and `jc` / `jetski` at work) → darkened project colour, 🤖 title, project/role badge preserved; restored on exit
 - `ssh host` → amber tab while connected, project colour back after
-- `tabcolor <preset>` · `tabcolor danger` · `tabcolor reset` · `tabcolor-preview <preset>`
-- `gsp` → verified pull: fetch, rebase, `script/test`, roll back on failure
+- `gsp` → verified pull & push: auto-resolves declared trivial conflicts, verifies with cache, pushes if ahead
+
+---
+
+## 🔄 Safe Pull (`gsp`)
+Verified atomic pull + push with declarative auto-resolution of trivial merge conflicts.
+
+- **Run:** `gsp` (fetches, rebases or auto-merges, verifies, pushes if ahead). Pushes by default; `--no-push` (`GSP_NO_PUSH=1`) to skip.
+- **Auto-resolve:** resolves conflicts matching `.gsp-merge.toml` (template: `git/gsp-merge.toml.example`). Use `--auto-resolve` (`GSP_AUTO_RESOLVE=1`, or `auto = true` in config) for unattended sync; interactive Y/n prompt otherwise; `--no-resolve` disables. Undeclared conflicts roll back untouched.
+- **Verify cache:** cached `script/test` result (`--verify` forces rerun, `--no-verify` / `GSP_NO_VERIFY=1` skips).
+- **Exit codes:** `0` synced/pushed · `1` aborted/rolled back (untouched) · `2` config/usage error · `3` synced locally, push failed · `4` locked creds without TTY (untouched).
+- **Recovery:** `git reset --hard refs/gsp/backup/<id>/head && git stash apply refs/gsp/backup/<id>/stash`
+- **Config helper:** `git-meta-resolve init` (create `.gsp-merge.toml`), `git-meta-resolve check-config [<path>]`. Test harness: `script/test-gsp` (not run by gsp).
 
 ---
 

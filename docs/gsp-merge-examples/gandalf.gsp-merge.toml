@@ -1,0 +1,25 @@
+# gandalf.gsp-merge.toml
+# Auto-merge configuration for Gandalf (version.properties).
+# Checked against /Users/pmatthews/src/gandalf/version.properties and build.py.
+# Note: build.py only manages and commits version.properties; Gandalf/Resources/Info.plist
+# uses Xcode placeholders $(MARKETING_VERSION) and $(CURRENT_PROJECT_VERSION),
+# and Package.swift contains no version strings.
+
+version = 1
+auto = false
+
+[[rule]]
+name = "build"
+files = ["version.properties"]
+line = '^version\.build=(?P<value>\d+)$'
+type = "counter"
+strategy = "max"
+
+[[group]]
+name = "semver"
+files = ["version.properties"]
+type = "semver_split"
+strategy = "max"
+major = '^version\.major=(?P<value>\d+)$'
+minor = '^version\.minor=(?P<value>\d+)$'
+patch = '^version\.patch=(?P<value>\d+)$'
