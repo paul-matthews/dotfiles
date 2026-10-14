@@ -7,7 +7,8 @@
 # A candidate must be owned by you, with a script/install nobody else can
 # write, and a git origin of paul-matthews/tool-roll. Ownership is checked
 # before git runs inside it. Always exits 0: dotfiles never fails because of
-# tool-roll. Interface: docs/install-contract.md in tool-roll.
+# tool-roll. Arguments (e.g. --dry-run) go to script/install.
+# Interface: docs/install-contract.md in tool-roll.
 
 info () { printf "  [ \033[00;34m..\033[0m ] %s\n" "$1"; }
 warn () { printf "  [ \033[0;33m!!\033[0m ] %s\n" "$1"; }
@@ -49,5 +50,5 @@ if [ -z "$found" ]; then
 fi
 
 info "tool-roll: $found/script/install"
-"$found/script/install" || warn "tool-roll: installer finished with problems (exit $?)"
+"$found/script/install" "$@" || warn "tool-roll: installer finished with problems (exit $?)"
 exit 0
