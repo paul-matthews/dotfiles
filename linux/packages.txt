@@ -17,3 +17,4 @@ age
 sops
 python3
 vim
+neovim
