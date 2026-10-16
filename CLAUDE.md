@@ -35,6 +35,7 @@ A file is sourced only if every tag in its name is one of this machine's tags. `
 - `script/test` — starts a fresh interactive zsh in a pseudo-terminal and checks the promises below; `gsp` verifies against it (cache-aware)
 - `script/test-gsp` — scenario test harness for `gsp` auto-merge in throwaway repos (not run by `gsp`)
 - `script/install` — packages: `brew bundle` on the core `Brewfile` then `Brewfile.<profile>` (`Brewfile.home` / `Brewfile.work`) on macOS; `linux/packages.txt` plus `linux/packages.pi.txt` via apt on any apt-based Linux (`name|fallback` per line); then every `*/install.sh`
+- `toolroll/install.sh` — hands off to tool-roll's `script/install` (AI skills into `~/.claude/skills`, `~/.agents/skills`, `$TOOL_ROLL_SKILL_DIRS`). Looks only at `$TOOL_ROLL_DIR`, `~/src/tool-roll`, `~/tool-roll`; uses the first owned by you with a non-writable installer and a `paul-matthews/tool-roll` origin; always exits 0. Work harness skill dirs go in `TOOL_ROLL_SKILL_DIRS` via the secrets file, never plaintext. tool-roll's side of the interface is its `docs/install-contract.md`
 - `bin/secrets` — SOPS + age secrets shared across machines: `pull`, `push`, `status`, `keygen`, `add-recipient`; aliased as `secrets-pull` etc.
 - `bin/cheat` — colored cheatsheet script (run `cheat` to view)
 - `bin/sync-upstream` — rebase onto holman/master
