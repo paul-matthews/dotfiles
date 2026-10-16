@@ -3,6 +3,10 @@
 # bootstrap links the dotfiles into $HOME, records this machine's profile,
 # installs the repo's git hooks and sets up this machine's secrets key.
 #
+# Links *.symlink to ~/.<name> and *.configlink to ~/.config/<name>; a name
+# ending in machine tags (zshenv.darwin.symlink) is linked only on matching
+# machines, without the tags (rules: script/links.sh).
+#
 # It only ever adds things. A file or symlink that already exists is left
 # alone and reported; nothing is overwritten, backed up or removed. Re-run it
 # whenever you like; on a configured machine it changes nothing.
@@ -20,6 +24,7 @@
 
 cd "$(dirname "$0")/.."
 DOTFILES_ROOT=$(pwd -P)
+. "$DOTFILES_ROOT/script/links.sh"
 
 set -e
 
@@ -28,7 +33,7 @@ TAGS=()
 DRY_RUN=false
 
 usage () {
-  sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '2,23p' "$0" | sed 's/^# \{0,1\}//'
 }
 
 while [ $# -gt 0 ]
@@ -338,20 +343,28 @@ setup_glow () {
   fi
 }
 
-install_dotfiles () {
-  for src in $(find -H "$DOTFILES_ROOT" -maxdepth 2 -name '*.symlink' -not -path '*.git*')
+# install_links <ext> <dst-prefix>: link every *.<ext> meant for this
+# machine. Tagged names (zshenv.darwin.symlink) follow script/links.sh.
+install_links () {
+  local plan src dst
+  if ! plan="$(link_plan "$DOTFILES_ROOT" "$1" "$2" "$(machine_tags | tr '\n' ' ')")"
+  then
+    fail "$plan"
+  fi
+  while IFS='	' read -r src dst
   do
-    dst="$HOME/.$(basename "${src%.*}")"
-    link_file "$src" "$dst"
-  done
+    [ -n "$src" ] && link_file "$src" "$dst"
+  done <<EOF
+$plan
+EOF
+}
+
+install_dotfiles () {
+  install_links symlink "$HOME/."
 }
 
 install_configlinks () {
-  for src in $(find -H "$DOTFILES_ROOT" -maxdepth 2 -name '*.configlink' -not -path '*.git*')
-  do
-    dst="$HOME/.config/$(basename "${src%.*}")"
-    link_file "$src" "$dst"
-  done
+  install_links configlink "$HOME/.config/"
 }
 
 if [ "$DRY_RUN" = true ]
