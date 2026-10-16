@@ -1,0 +1,11 @@
+# ~/.zshenv on work Linux boxes (script/bootstrap links zshenv.work.linux.symlink).
+#
+# Every zsh reads this first, including the non-interactive `zsh -c` that
+# `ssh host cmd` runs, which reads nothing else. So it holds PATH only:
+# fast, silent, no commands run. No Homebrew here. Work-internal tool dirs
+# don't belong in this public file: they go in the secrets file.
+# Confirmed by handoff/work-linux-zshenv.md before it is relied on.
+
+export ZSH=$HOME/.dotfiles
+typeset -U path
+path=($HOME/.local/bin(N-/) $ZSH/bin(N-/) $path)

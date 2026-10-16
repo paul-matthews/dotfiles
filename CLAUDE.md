@@ -10,7 +10,7 @@ Each top-level directory is a "topic" (git, vim, system, cosmic, etc.). The topi
 1. `*/path.zsh` — loaded first (PATH modifications)
 2. `**/*.zsh` — loaded next, skipping `path.zsh`, `completion.zsh`, `antigen.zsh` and `loader.zsh`
 3. `*/completion.zsh` — loaded last
-4. `*.symlink` — symlinked to `~/.<name>` by `script/bootstrap`; `*.configlink` to `~/.config/<name>`
+4. `*.symlink` — symlinked to `~/.<name>` by `script/bootstrap`; `*.configlink` to `~/.config/<name>`. They take machine tags too (below), but only the built-in ones (`home work darwin linux pi`), so a plain dotted name like `gitconfig.local.symlink` still links as `~/.gitconfig.local`. Two variants that both match one machine make bootstrap fail. Rules in `script/links.sh`, shared with `script/test`
 
 ### Machine profile and tags
 A file is sourced only if every tag in its name is one of this machine's tags. `DOTFILES_TAGS` is built once per shell from: the profile (`home` or `work`, read from `~/.dotfiles-profile`, written by `script/bootstrap --profile X`), the OS from `uname` (`darwin` or `linux`), `pi` when `/proc/device-tree/model` names a Raspberry Pi, and any extra tags in `~/.dotfiles-tags` (`script/bootstrap --tag X`). So `foo.zsh` loads everywhere, `foo.work.zsh` on work machines, `foo.work.linux.zsh` on the work Linux box, `foo.pi.zsh` on Pis. Tags are stripped before a file is classified, so `path.work.zsh` still loads first. Guard by existence for tools, by tag for machines.
@@ -18,6 +18,7 @@ A file is sourced only if every tag in its name is one of this machine's tags. `
 `DOTFILES_SAFE=1 zsh` starts a shell with no topic files, for repairing a broken setup.
 
 ### Key files
+- `zsh/zshenv.<tags>.symlink` → `~/.zshenv` — PATH only, for non-interactive shells (`ssh host cmd` reads nothing else). Variants: `darwin` (every Mac: `~/.local/bin`, `$ZSH/bin`, Homebrew), `work.linux` (no Homebrew; confirmed via `handoff/work-linux-zshenv.md`), `pi`. Keep them silent and fork-free; interactive shells re-set PATH in `zprofile` and `system/_path.zsh` as before. A new link file shows as "new link(s) pending" in `script/test` until bootstrap runs, rather than failing (so `gsp` doesn't roll the pull back)
 - `zsh/zshrc.symlink` → `~/.zshrc` — main shell config, antigen plugins, topic loader, tool integrations (fzf, zoxide, direnv)
 - `git/gitconfig.symlink` → `~/.gitconfig` — git config with SSH signing, delta pager, rebase defaults
 - `vim/vimrc.symlink` → `~/.vimrc` — vim-plug with tpope plugins, fzf.vim, CoC LSP

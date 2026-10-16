@@ -303,12 +303,54 @@ if [[ "$expected_profile" == "work" && -f "$HOME/.gitconfig.work.user" ]]; then
   fi
 fi
 
+# Link files follow the loader's tag rule (script/links.sh): right variant per
+# machine, dotted names that aren't tags untouched, two claimants refused.
+(
+  . "$DOTFILES_ROOT/script/links.sh"
+  r="$tmp/links"; mkdir -p "$r/zsh" "$r/git"
+  touch "$r/zsh/zshrc.symlink" "$r/git/gitconfig.local.symlink" \
+        "$r/zsh/zshenv.darwin.symlink" "$r/zsh/zshenv.work.linux.symlink" "$r/zsh/zshenv.pi.symlink"
+  plan() { link_plan "$r" symlink "H/." "$1" | awk -F'\t' '{sub(".*/", "", $1); printf "%s>%s ", $1, $2}'; }
+  [[ "$(plan 'home darwin')" == "gitconfig.local.symlink>H/.gitconfig.local zshenv.darwin.symlink>H/.zshenv zshrc.symlink>H/.zshrc " ]] || exit 1
+  [[ "$(plan 'work darwin')" == *"zshenv.darwin.symlink>H/.zshenv"* ]] || exit 1
+  [[ "$(plan 'work linux')" == *"zshenv.work.linux.symlink>H/.zshenv"* ]] || exit 1
+  [[ "$(plan 'home linux pi')" == *"zshenv.pi.symlink>H/.zshenv"* ]] || exit 1
+  [[ "$(plan 'home linux')" != *zshenv* ]] || exit 1
+  touch "$r/zsh/zshenv.linux.symlink"
+  ! link_plan "$r" symlink "H/." "home linux pi" >/dev/null
+) && ok "tagged link files: right variant per machine, plain dotted names kept, clashes refused" \
+  || bad "tagged link files: script/links.sh picked the wrong variants or allowed a clash"
+
+# ~/.zshenv gives non-interactive shells (ssh host cmd) the basics on PATH
+if [[ -e "$HOME/.zshenv" ]]; then
+  ni_path="$(env -i HOME="$HOME" PATH=/usr/bin:/bin /bin/zsh -c 'print -r -- $PATH' 2>/dev/null)"
+  missing=()
+  [[ -d "$HOME/.local/bin" && ":$ni_path:" != *":$HOME/.local/bin:"* ]] && missing+=("~/.local/bin")
+  [[ "$(uname -s)" == Darwin && -d /opt/homebrew/bin && ":$ni_path:" != *":/opt/homebrew/bin:"* ]] && missing+=("/opt/homebrew/bin")
+  if [[ ${#missing[@]} -eq 0 ]]; then
+    ok "non-interactive zsh (ssh host cmd) has ~/.local/bin$([[ "$(uname -s)" == Darwin ]] && echo ' and Homebrew') on PATH"
+  else
+    bad "non-interactive zsh is missing ${missing[*]} on PATH (check ~/.zshenv)"
+  fi
+else
+  skp "non-interactive zsh PATH" "no ~/.zshenv on this machine (run script/bootstrap if a variant exists for it)"
+fi
+
 #------------------------------------------------------------------------------
 # 7. Bootstrap is idempotent on a configured machine
 #------------------------------------------------------------------------------
 if out="$("$DOTFILES_ROOT/script/bootstrap" --dry-run 2>&1)"; then
   # a pending secrets decrypt is state, not configuration; see the secrets check
   out="$(grep -v 'would: decrypt secrets' <<<"$out")"
+  # A brand-new link (its target doesn't exist yet) is state too: the pull that
+  # adds a link file can't have been bootstrapped yet, and failing here would
+  # make gsp roll that pull back on every machine. Anything else still fails.
+  pending="$(grep -E 'would: (link |create directory )' <<<"$out" || true)"
+  out="$(grep -v -E 'would: (link |create directory )' <<<"$out" || true)"
+  if [[ -n "$pending" ]]; then
+    skp "bootstrap: $(grep -c 'would: link ' <<<"$pending") new link(s) pending" "run script/bootstrap"
+    sed 's/^/      /' <<<"$pending"
+  fi
   if grep -q 'would:' <<<"$out"; then
     bad "bootstrap --dry-run still has something to do:"
     grep 'would:' <<<"$out" | sed 's/^/      /'
