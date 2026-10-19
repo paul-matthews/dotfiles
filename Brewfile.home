@@ -20,5 +20,4 @@ cask 'android-platform-tools'
 # Apps
 cask '1password'
 cask 'ghostty'
-cask 'steam'
 cask 'whatsapp'
