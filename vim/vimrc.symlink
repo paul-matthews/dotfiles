@@ -4,6 +4,11 @@
 " These settings are universal and should work on any version of Vim.
 "==============================================================================
 
+if has('nvim')
+  set runtimepath^=~/.vim runtimepath+=~/.vim/after
+  let &packpath = &runtimepath
+endif
+
 set nocompatible            " Use Vim features, not Vi defaults
 set encoding=utf-8          " Set default encoding to UTF-8
 set backspace=indent,eol,start " Allow backspace over everything in insert mode
