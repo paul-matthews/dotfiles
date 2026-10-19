@@ -51,4 +51,3 @@ cask 'font-meslo-lg-nerd-font'
 # Apps
 cask 'raycast'
 cask 'visual-studio-code'
-cask 'zed'

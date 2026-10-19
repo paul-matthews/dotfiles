@@ -4,7 +4,6 @@ cask_args appdir: '/Applications'
 # Media
 brew 'yt-dlp'
 cask 'quicklook-video'
-cask 'sonos'
 
 # Pico / RPi toolchain (cosmic-clock and friends)
 brew 'cmake'
