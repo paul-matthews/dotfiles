@@ -25,10 +25,21 @@ dotfiles|DOT|📂|Dotfiles||*/dotfiles*
 android|AND|📱|Android|home|*/android*
 herd|HRD|🐑|Herd|home|*/herd*
 planner|PLN|📆|Planner Tools|home|*/planner-tools*
+lacasa|CAS|🏡|La Casa|home|*/la-casa*
+pi|RPI|🍓|Pi|home|*/src/pi */src/pi/*
+m5stack|M5S|📟|M5Stack|home|*/m5stack*
+toolroll|TRL|🧰|Tool Roll||*/tool-roll*
+aiworkspace|AIW|🧠|AI Workspace|home|*/ai-workspace*
 obsidian|OBS|🔮|Obsidian|work|*obsidian* *-work* */work/*
 gandalf|GAN|🧙|Gandalf|work|*gandalf*
 docker|DOC|🐳|Docker|home|*/src/docker */src/docker/*
 '
+
+# SSH hosts with their own colours; any other host gets the default amber.
+# The table is _TABCOLOR_SSH_TABLE, set in the secrets file (~/.localrc.secrets)
+# so machine names stay out of this public repo. One row per host:
+#   name|SHORT|emoji|tab R G B|background hex|host globs
+# Globs are lowercase and matched against the destination with any user@ removed.
 
 # _tabcolor_row <preset>: print that preset's row, or nothing.
 _tabcolor_row() {
@@ -137,6 +148,56 @@ _tabcolor_get_palette() {
       echo "175 105 135"
       echo "195 125 105"
       echo "180 115 115"
+      ;;
+    lacasa)
+      echo "150 165 70"
+      echo "140 155 80"
+      echo "160 175 60"
+      echo "130 150 85"
+      echo "155 170 65"
+      echo "145 160 75"
+      echo "165 180 55"
+      echo "135 155 80"
+      ;;
+    pi)
+      echo "175 40 100"
+      echo "165 35 110"
+      echo "185 45 90"
+      echo "160 40 115"
+      echo "180 50 95"
+      echo "170 30 105"
+      echo "190 40 85"
+      echo "165 45 105"
+      ;;
+    m5stack)
+      echo "240 110 30"
+      echo "230 100 40"
+      echo "250 120 25"
+      echo "225 105 45"
+      echo "245 115 35"
+      echo "235 95 30"
+      echo "250 125 40"
+      echo "230 110 35"
+      ;;
+    toolroll)
+      echo "140 150 165"
+      echo "130 140 160"
+      echo "150 160 170"
+      echo "125 135 155"
+      echo "145 155 175"
+      echo "135 145 160"
+      echo "155 165 180"
+      echo "140 145 165"
+      ;;
+    aiworkspace)
+      echo "170 200 240"
+      echo "160 190 235"
+      echo "180 210 245"
+      echo "155 185 230"
+      echo "175 205 250"
+      echo "165 195 240"
+      echo "185 215 250"
+      echo "160 200 235"
       ;;
     obsidian)   # from the retired iTerm "Work" profile: 167 139 250
       echo "167 139 250"
