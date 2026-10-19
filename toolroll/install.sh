@@ -49,6 +49,71 @@ if [ -z "$found" ]; then
   exit 0
 fi
 
+# Ensure ~/.config/crank/config exists with this machine's realm
+if [ -d "$found/tools/crank" ] && [ ! -f "$HOME/.config/crank/config" ]; then
+  p="home"
+  [ -r "$HOME/.dotfiles-profile" ] && p="$(tr -d '[:space:]' < "$HOME/.dotfiles-profile")"
+  p="${p:-home}"
+  case "${1:-}" in
+    -n|--dry-run)
+      info "crank: would create ~/.config/crank/config (CRANK_REALM=$p)"
+      ;;
+    *)
+      mkdir -p "$HOME/.config/crank"
+      cat > "$HOME/.config/crank/config" <<EOF
+CRANK_REALM="$p"
+if ! typeset -f dotfiles_has_tag >/dev/null 2>&1; then
+  dotfiles_has_tag() {
+    local p=""
+    [ -r "$HOME/.dotfiles-profile" ] && p="$(tr -d '[:space:]' < "$HOME/.dotfiles-profile")"
+    [[ "$1" == "\${p:-home}" || "$1" == "\$(uname -s | tr '[:upper:]' '[:lower:]')" ]]
+  }
+fi
+[[ -f ~/.localrc.secrets ]] && source ~/.localrc.secrets || true
+return 0
+EOF
+      if [ "$p" = "home" ]; then
+        cat >> "$HOME/.config/crank/config" <<'EOF'
+CRANK_PROVIDER_CMD='claude -p --no-session-persistence --tools "" --strict-mcp-config'
+CRANK_PROVIDER_SCHEMA_FLAG=--json-schema
+EOF
+      fi
+      chmod 600 "$HOME/.config/crank/config"
+      info "crank: created ~/.config/crank/config (CRANK_REALM=$p)"
+      ;;
+  esac
+fi
+
 info "tool-roll: $found/script/install"
 "$found/script/install" "$@" || warn "tool-roll: installer finished with problems (exit $?)"
+
+# Build crank.app on macOS if not yet installed
+if [ "$(uname -s)" = "Darwin" ] && [ -x "$found/tools/crank/app/build" ] && [ ! -d "$HOME/Applications/crank.app" ]; then
+  case "${1:-}" in
+    -n|--dry-run) info "crank.app: would build into ~/Applications (dry run)" ;;
+    *)
+      info "crank.app: building into ~/Applications"
+      "$found/tools/crank/app/build" --install || warn "crank.app: build failed (exit $?)"
+      ;;
+  esac
+fi
+
+# Build & install Alfred workflow on macOS if Alfred is present and workflow is not installed
+if [ "$(uname -s)" = "Darwin" ] && [ -x "$found/tools/crank/alfred/build" ]; then
+  _aprefs="$HOME/Library/Application Support/Alfred/prefs.json"
+  if [ -r "$_aprefs" ]; then
+    _acur="$(sed -n 's/.*"current" *: *"\(.*\)".*/\1/p' "$_aprefs" 2>/dev/null | tr -d '\\')"
+    if [ -n "$_acur" ] && [ -d "$_acur/workflows" ]; then
+      if ! grep -l -F 'crank-workflow' "$_acur"/workflows/*/info.plist >/dev/null 2>&1; then
+        case "${1:-}" in
+          -n|--dry-run) info "crank Alfred workflow: would build and install (dry run)" ;;
+          *)
+            info "crank Alfred workflow: building and installing"
+            "$found/tools/crank/alfred/build" --install || warn "crank Alfred workflow: build failed (exit $?)"
+            ;;
+        esac
+      fi
+    fi
+  fi
+fi
 exit 0
