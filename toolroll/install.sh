@@ -97,4 +97,23 @@ if [ "$(uname -s)" = "Darwin" ] && [ -x "$found/tools/crank/app/build" ] && [ ! 
       ;;
   esac
 fi
+
+# Build & install Alfred workflow on macOS if Alfred is present and workflow is not installed
+if [ "$(uname -s)" = "Darwin" ] && [ -x "$found/tools/crank/alfred/build" ]; then
+  _aprefs="$HOME/Library/Application Support/Alfred/prefs.json"
+  if [ -r "$_aprefs" ]; then
+    _acur="$(sed -n 's/.*"current" *: *"\(.*\)".*/\1/p' "$_aprefs" 2>/dev/null | tr -d '\\')"
+    if [ -n "$_acur" ] && [ -d "$_acur/workflows" ]; then
+      if ! grep -l -F 'crank-workflow' "$_acur"/workflows/*/info.plist >/dev/null 2>&1; then
+        case "${1:-}" in
+          -n|--dry-run) info "crank Alfred workflow: would build and install (dry run)" ;;
+          *)
+            info "crank Alfred workflow: building and installing"
+            "$found/tools/crank/alfred/build" --install || warn "crank Alfred workflow: build failed (exit $?)"
+            ;;
+        esac
+      fi
+    fi
+  fi
+fi
 exit 0
