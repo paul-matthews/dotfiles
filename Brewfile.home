@@ -3,7 +3,6 @@ cask_args appdir: '/Applications'
 
 # Media
 brew 'yt-dlp'
-cask 'vlc'
 cask 'quicklook-video'
 cask 'plex'
 cask 'sonos'
