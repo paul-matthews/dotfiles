@@ -1,0 +1,1858 @@
+#!/usr/bin/env bash
+#
+# script/test-gsp — Scenario harness for gsp auto-resolution.
+#
+# Verifies all 15 scenarios specified in the auto-resolution plan and contract:
+#   1. Envoy: counter max and max_unique strategies, merge trailer, push
+#   2. Envoy: version code + real code conflict -> abort, worktree untouched
+#   3. Gandalf: adjacent lines, semver_split doesn't mix tuples
+#   4. Obsidian: frontmatter conflict + non-overlapping body edits -> latest wins
+#   5. Obsidian: body conflicts too -> abort
+#   6. Non-TTY without consent -> abort; with --auto-resolve -> resolved & pushed
+#   7. script/test failure after resolution -> rollback; merge parked at refs/gsp/failed/*
+#   8. SIGINT injected between commit-tree and ff -> PRE_HEAD + stash restored
+#   9. Push race: remote advances between verify and push -> retry succeeds
+#  10. Locked credentials, no TTY -> exit 4 within 5s, repo unchanged
+#  11. Push fails after auto-resolve -> parked at refs/gsp/unpushed/*, exit 3;
+#      re-running resolves fresh with no stacked merge
+#  12. --no-push with auto-resolve -> merge kept locally, warning printed, exit 0
+#  13. Timing: up-to-date path with warm verify cache completes under 0.3s
+#  14. No re-resolution loop: pushed merge -> other machine fast-forwards, re-run is a
+#      no-op, later edits rebase cleanly; origin has exactly one merge commit
+#  15. Hardening: detached HEAD refused; failed stash stops before reset; pid-less lock reclaimed
+#
+# Exit 0 if all executed scenarios pass, exit 1 on any failure.
+# Usage:
+#   script/test-gsp            # run all 15 scenarios
+#   script/test-gsp 1 4 10     # run only scenarios 1, 4, and 10
+
+set -u
+cd "$(dirname "$0")/.." || exit 2
+DOTFILES_ROOT="$(pwd -P)"
+GSP="$DOTFILES_ROOT/bin/git-safe-pull"
+export PATH="$DOTFILES_ROOT/bin:$PATH"
+
+pass=0
+fail=0
+skip=0
+ok()   { printf '  \033[32m✓\033[0m %s\n' "$1"; pass=$((pass + 1)); }
+bad()  { printf '  \033[31m✗\033[0m %s\n' "$1"; fail=$((fail + 1)); }
+skp()  { printf '  \033[33m-\033[0m %s (skipped: %s)\n' "$1" "$2"; skip=$((skip + 1)); }
+
+tmp="$(mktemp -d)"
+trap 'rm -rf "$tmp"' EXIT INT TERM
+
+# Protocol helpers for scenarios inside subshells
+s_ok()   { printf 'OK: %s\n' "$1"; }
+s_bad()  { printf 'BAD: %s\n' "$1"; }
+s_skp()  { printf 'SKP: %s | %s\n' "$1" "$2"; }
+s_diag() { printf 'DIAG: %s\n' "$1"; }
+
+# Set up bare remote and clones A & B
+setup_test_repo() {
+  local dir="$1"
+  local bare="$dir/bare.git"
+  local clone_a="$dir/clone_a"
+  local clone_b="$dir/clone_b"
+
+  mkdir -p "$dir"
+  git init --bare -q "$bare"
+  git -C "$bare" symbolic-ref HEAD refs/heads/main
+
+  git clone -q "file://$bare" "$clone_a" 2>/dev/null
+  git -C "$clone_a" config user.name "Test A"
+  git -C "$clone_a" config user.email "test-a@example.com"
+  git -C "$clone_a" config commit.gpgsign false
+  git -C "$clone_a" checkout -q -b main 2>/dev/null || true
+
+  mkdir -p "$clone_a/script"
+  cat << 'EOF' > "$clone_a/script/test"
+#!/usr/bin/env bash
+exit 0
+EOF
+  chmod +x "$clone_a/script/test"
+  echo "initial" > "$clone_a/init.txt"
+  git -C "$clone_a" add .
+  git -C "$clone_a" commit -q -m "Initial commit"
+  git -C "$clone_a" push -q -u origin main
+
+  git clone -q "file://$bare" "$clone_b"
+  git -C "$clone_b" config user.name "Test B"
+  git -C "$clone_b" config user.email "test-b@example.com"
+  git -C "$clone_b" config commit.gpgsign false
+}
+
+# Assert zero-loss invariants (a) and (c)
+assert_zero_loss() {
+  local clone_a="$1"
+  local bare="$2"
+  shift 2
+  local commits=("$@")
+
+  # (a) Every commit created in A and B is reachable from A's HEAD, origin's branch, or refs/gsp/*
+  local targets=()
+  targets+=("HEAD")
+  while IFS= read -r ref; do
+    [[ -n "$ref" ]] && targets+=("$ref")
+  done < <(git -C "$clone_a" for-each-ref --format='%(refname)' refs/remotes/ refs/gsp/ refs/heads/)
+
+  local bare_targets=()
+  while IFS= read -r ref; do
+    [[ -n "$ref" ]] && bare_targets+=("$ref")
+  done < <(git -C "$bare" for-each-ref --format='%(refname)' refs/heads/)
+
+  local all_reachable=true
+  for c in "${commits[@]}"; do
+    [[ -z "$c" ]] && continue
+    local reachable=false
+    for t in "${targets[@]}"; do
+      if git -C "$clone_a" merge-base --is-ancestor "$c" "$t" 2>/dev/null; then
+        reachable=true
+        break
+      fi
+    done
+    if [[ "$reachable" == false ]]; then
+      for bt in "${bare_targets[@]}"; do
+        if git -C "$bare" merge-base --is-ancestor "$c" "$bt" 2>/dev/null; then
+          reachable=true
+          break
+        fi
+      done
+    fi
+    if [[ "$reachable" == false ]]; then
+      all_reachable=false
+      s_bad "invariant (a): commit ${c:0:8} not reachable from HEAD, origin, or refs/gsp/*"
+    fi
+  done
+  if [[ "$all_reachable" == true ]]; then
+    s_ok "invariant (a): all created commits reachable"
+  fi
+
+  # (c) No conflict-marker lines in worktree
+  local markers
+  markers="$(grep -rnE '^(<{7}|={7}|>{7}|\|{7})($| )' "$clone_a" --exclude-dir=.git 2>/dev/null || true)"
+  if [[ -n "$markers" ]]; then
+    s_bad "invariant (c): conflict markers found in worktree: $(head -1 <<< "$markers")"
+  else
+    s_ok "invariant (c): no conflict markers in worktree"
+  fi
+}
+
+# Assert zero-loss invariant (b): uncommitted edits preserved
+assert_uncommitted_preserved() {
+  local clone_a="$1"
+  local tracked_file="$2"
+  local want_tracked="$3"
+  local untracked_file="$4"
+  local want_untracked="$5"
+
+  local t_actual=""
+  [[ -f "$clone_a/$tracked_file" ]] && t_actual="$(cat "$clone_a/$tracked_file")"
+  local u_actual=""
+  [[ -f "$clone_a/$untracked_file" ]] && u_actual="$(cat "$clone_a/$untracked_file")"
+
+  if [[ "$t_actual" == "$want_tracked" && "$u_actual" == "$want_untracked" ]]; then
+    s_ok "invariant (b): uncommitted tracked and untracked files preserved byte-identical"
+  else
+    # gsp must restore edits in place on every path (success, abort, rollback).
+    # Edits that only survive in a backup ref are recoverable, but still a bug.
+    local stash_ref
+    stash_ref="$(git -C "$clone_a" for-each-ref --format='%(refname)' refs/gsp/backup/ | grep '/stash$' | tail -1)"
+    s_bad "invariant (b): uncommitted edits not restored in place (backup ref: ${stash_ref:-none})"
+    s_diag "tracked now: $(printf '%q' "$t_actual") | untracked now: $(printf '%q' "$u_actual")"
+    s_diag "git status: $(git -C "$clone_a" status --porcelain | tr '\n' ';')"
+  fi
+}
+
+# ==============================================================================
+# Scenario 1: Envoy counter max and max_unique strategies
+# ==============================================================================
+scenario_1() {
+  local dir="$1"
+  setup_test_repo "$dir"
+  local bare="$dir/bare.git"
+  local clone_a="$dir/clone_a"
+  local clone_b="$dir/clone_b"
+
+  cat << 'EOF' > "$clone_a/version.go"
+package main
+
+const (
+	EnvoyVersion     = "1.0.0"
+	EnvoyVersionCode = 115
+)
+
+func hello() string {
+	return "hi"
+}
+EOF
+
+  cat << 'EOF' > "$clone_a/.gsp-merge.toml"
+version = 1
+[[rule]]
+name = "envoy-version-code"
+files = ["**/version.go"]
+line = '^\s*EnvoyVersionCode\s*=\s*(?P<value>\d+)\s*$'
+type = "counter"
+strategy = "max"
+EOF
+
+  git -C "$clone_a" add .
+  git -C "$clone_a" commit -q -m "Add version.go and config"
+  git -C "$clone_a" push -q origin main
+  git -C "$clone_b" pull -q
+
+  # Divergence 1: strategy max
+  # B bumps to 116 and pushes
+  sed -i '' 's/EnvoyVersionCode = 115/EnvoyVersionCode = 116/' "$clone_b/version.go" 2>/dev/null || \
+    sed -i 's/EnvoyVersionCode = 115/EnvoyVersionCode = 116/' "$clone_b/version.go"
+  git -C "$clone_b" commit -q -am "B bumps to 116"
+  git -C "$clone_b" push -q origin main
+  local b_commit
+  b_commit="$(git -C "$clone_b" rev-parse HEAD)"
+
+  # A bumps to 117
+  sed -i '' 's/EnvoyVersionCode = 115/EnvoyVersionCode = 117/' "$clone_a/version.go" 2>/dev/null || \
+    sed -i 's/EnvoyVersionCode = 115/EnvoyVersionCode = 117/' "$clone_a/version.go"
+  git -C "$clone_a" commit -q -am "A bumps to 117"
+  local a_commit
+  a_commit="$(git -C "$clone_a" rev-parse HEAD)"
+
+  # Uncommitted edits in A
+  echo "local-tracked-edit" >> "$clone_a/init.txt"
+  echo "local-untracked-file" > "$clone_a/untracked.txt"
+  local want_tracked
+  want_tracked="$(cat "$clone_a/init.txt")"
+  local want_untracked
+  want_untracked="$(cat "$clone_a/untracked.txt")"
+
+  # Run gsp in A
+  local rc=0
+  local out
+  out="$(cd "$clone_a" && "$GSP" --auto-resolve </dev/null 2>&1)" || rc=$?
+
+  if [[ $rc -ne 0 ]]; then
+    s_bad "max strategy: gsp exited $rc (expected 0)"
+    s_diag "$(head -5 <<< "$out")"
+  else
+    s_ok "max strategy: gsp synced with exit 0"
+    # Check resolved content
+    if grep -q 'EnvoyVersionCode = 117' "$clone_a/version.go"; then
+      s_ok "max strategy: resolved EnvoyVersionCode to 117"
+    else
+      s_bad "max strategy: expected 117 in version.go, found $(grep 'EnvoyVersionCode' "$clone_a/version.go" || true)"
+    fi
+
+    # Check merge commit parents and trailer
+    local num_parents
+    num_parents="$(git -C "$clone_a" rev-parse HEAD^@ 2>/dev/null | wc -w | tr -d ' ')"
+    if [[ "$num_parents" == "2" ]]; then
+      s_ok "merge commit has 2 parents"
+    else
+      s_bad "merge commit has $num_parents parents (expected 2)"
+    fi
+
+    if git -C "$clone_a" log -1 --format=%B | grep -q 'Gsp-Auto-Resolved:'; then
+      s_ok "merge commit has Gsp-Auto-Resolved trailer"
+    else
+      s_bad "merge commit missing Gsp-Auto-Resolved trailer"
+    fi
+
+    # Origin received push
+    local origin_head
+    origin_head="$(git -C "$bare" rev-parse main 2>/dev/null || true)"
+    local a_head
+    a_head="$(git -C "$clone_a" rev-parse HEAD 2>/dev/null || true)"
+    if [[ "$origin_head" == "$a_head" ]]; then
+      s_ok "origin received the push"
+    else
+      s_bad "origin main ($origin_head) does not match A HEAD ($a_head)"
+    fi
+  fi
+
+  assert_zero_loss "$clone_a" "$bare" "$a_commit" "$b_commit"
+  assert_uncommitted_preserved "$clone_a" "init.txt" "$want_tracked" "untracked.txt" "$want_untracked"
+
+  # Part 2: max_unique
+  # Change strategy to max_unique in A & B
+  sed -i '' 's/strategy = "max"/strategy = "max_unique"/' "$clone_a/.gsp-merge.toml" 2>/dev/null || \
+    sed -i 's/strategy = "max"/strategy = "max_unique"/' "$clone_a/.gsp-merge.toml"
+  git -C "$clone_a" commit -q -am "Change to max_unique"
+  git -C "$clone_a" push -q origin main
+  git -C "$clone_b" pull -q
+
+  # B bumps to 118 and pushes
+  sed -i '' 's/EnvoyVersionCode = .*/EnvoyVersionCode = 118/' "$clone_b/version.go" 2>/dev/null || \
+    sed -i 's/EnvoyVersionCode = .*/EnvoyVersionCode = 118/' "$clone_b/version.go"
+  git -C "$clone_b" commit -q -am "B bumps to 118"
+  git -C "$clone_b" push -q origin main
+  local b_commit_u
+  b_commit_u="$(git -C "$clone_b" rev-parse HEAD)"
+
+  # A bumps to 119
+  sed -i '' 's/EnvoyVersionCode = .*/EnvoyVersionCode = 119/' "$clone_a/version.go" 2>/dev/null || \
+    sed -i 's/EnvoyVersionCode = .*/EnvoyVersionCode = 119/' "$clone_a/version.go"
+  git -C "$clone_a" commit -q -am "A bumps to 119"
+  local a_commit_u
+  a_commit_u="$(git -C "$clone_a" rev-parse HEAD)"
+
+  rc=0
+  out="$(cd "$clone_a" && "$GSP" --auto-resolve </dev/null 2>&1)" || rc=$?
+
+  if [[ $rc -ne 0 ]]; then
+    s_bad "max_unique strategy: gsp exited $rc (expected 0)"
+  else
+    s_ok "max_unique strategy: gsp synced with exit 0"
+    if grep -q 'EnvoyVersionCode = 120' "$clone_a/version.go"; then
+      s_ok "max_unique strategy: resolved EnvoyVersionCode to 120 (max+1)"
+    else
+      s_bad "max_unique strategy: expected 120 in version.go, found $(grep 'EnvoyVersionCode' "$clone_a/version.go" || true)"
+    fi
+  fi
+
+  assert_zero_loss "$clone_a" "$bare" "$a_commit_u" "$b_commit_u"
+}
+
+# ==============================================================================
+# Scenario 2: Envoy code conflict -> abort, worktree untouched
+# ==============================================================================
+scenario_2() {
+  local dir="$1"
+  setup_test_repo "$dir"
+  local bare="$dir/bare.git"
+  local clone_a="$dir/clone_a"
+  local clone_b="$dir/clone_b"
+
+  cat << 'EOF' > "$clone_a/version.go"
+package main
+
+const (
+	EnvoyVersionCode = 115
+)
+
+func hello() string {
+	return "base"
+}
+EOF
+
+  cat << 'EOF' > "$clone_a/.gsp-merge.toml"
+version = 1
+[[rule]]
+name = "envoy-version-code"
+files = ["**/version.go"]
+line = '^\s*EnvoyVersionCode\s*=\s*(?P<value>\d+)\s*$'
+type = "counter"
+EOF
+
+  git -C "$clone_a" add .
+  git -C "$clone_a" commit -q -m "Base setup"
+  git -C "$clone_a" push -q origin main
+  git -C "$clone_b" pull -q
+
+  # B bumps code to 116 AND changes hello() to "from B"
+  cat << 'EOF' > "$clone_b/version.go"
+package main
+
+const (
+	EnvoyVersionCode = 116
+)
+
+func hello() string {
+	return "from B"
+}
+EOF
+  git -C "$clone_b" commit -q -am "B bumps and edits hello"
+  git -C "$clone_b" push -q origin main
+  local b_commit
+  b_commit="$(git -C "$clone_b" rev-parse HEAD)"
+
+  # A bumps code to 117 AND changes hello() to "from A"
+  cat << 'EOF' > "$clone_a/version.go"
+package main
+
+const (
+	EnvoyVersionCode = 117
+)
+
+func hello() string {
+	return "from A"
+}
+EOF
+  git -C "$clone_a" commit -q -am "A bumps and edits hello"
+  local a_commit
+  a_commit="$(git -C "$clone_a" rev-parse HEAD)"
+
+  echo "local-tracked-edit" >> "$clone_a/init.txt"
+  echo "local-untracked-file" > "$clone_a/untracked.txt"
+  local want_tracked
+  want_tracked="$(cat "$clone_a/init.txt")"
+  local want_untracked
+  want_untracked="$(cat "$clone_a/untracked.txt")"
+  local pre_head="$a_commit"
+  local pre_version_go
+  pre_version_go="$(cat "$clone_a/version.go")"
+
+  local rc=0
+  local out
+  out="$(cd "$clone_a" && "$GSP" --auto-resolve </dev/null 2>&1)" || rc=$?
+
+  if [[ $rc -eq 1 ]]; then
+    s_ok "aborted with exit code 1"
+  else
+    s_bad "expected exit code 1 on code conflict, got $rc"
+  fi
+
+  local current_head
+  current_head="$(git -C "$clone_a" rev-parse HEAD)"
+  if [[ "$current_head" == "$pre_head" ]]; then
+    s_ok "HEAD unchanged at PRE_HEAD"
+  else
+    s_bad "HEAD moved: was $pre_head, now $current_head"
+  fi
+
+  local current_version_go
+  current_version_go="$(cat "$clone_a/version.go")"
+  if [[ "$current_version_go" == "$pre_version_go" ]]; then
+    s_ok "worktree version.go untouched"
+  else
+    s_bad "worktree version.go was modified"
+  fi
+
+  # Report should mention the conflict/reason
+  if grep -qi -e 'conflict' -e 'unresolvable' -e 'hello' <<< "$out"; then
+    s_ok "report mentions conflict or unresolvable hunk"
+  else
+    s_bad "report missing conflict/unresolvable explanation"
+  fi
+
+  assert_zero_loss "$clone_a" "$bare" "$a_commit" "$b_commit"
+  assert_uncommitted_preserved "$clone_a" "init.txt" "$want_tracked" "untracked.txt" "$want_untracked"
+}
+
+# ==============================================================================
+# Scenario 3: Gandalf adjacent lines, semver_split doesn't mix tuples
+# ==============================================================================
+scenario_3() {
+  local dir="$1"
+  setup_test_repo "$dir"
+  local bare="$dir/bare.git"
+  local clone_a="$dir/clone_a"
+  local clone_b="$dir/clone_b"
+
+  cat << 'EOF' > "$clone_a/version.properties"
+version.major=1
+version.minor=2
+version.patch=0
+version.build=100
+EOF
+
+  cat << 'EOF' > "$clone_a/.gsp-merge.toml"
+version = 1
+[[rule]]
+name = "build"
+files = ["version.properties"]
+line = '^version\.build=(?P<value>\d+)$'
+type = "counter"
+
+[[group]]
+name = "semver"
+files = ["version.properties"]
+type = "semver_split"
+major = '^version\.major=(?P<value>\d+)$'
+minor = '^version\.minor=(?P<value>\d+)$'
+patch = '^version\.patch=(?P<value>\d+)$'
+EOF
+
+  git -C "$clone_a" add .
+  git -C "$clone_a" commit -q -m "Gandalf base"
+  git -C "$clone_a" push -q origin main
+  git -C "$clone_b" pull -q
+
+  # B bumps minor: (1, 3, 0), build=101
+  cat << 'EOF' > "$clone_b/version.properties"
+version.major=1
+version.minor=3
+version.patch=0
+version.build=101
+EOF
+  git -C "$clone_b" commit -q -am "B bumps minor to 1.3.0"
+  git -C "$clone_b" push -q origin main
+  local b_commit
+  b_commit="$(git -C "$clone_b" rev-parse HEAD)"
+
+  # A bumps patch: (1, 2, 5), build=102
+  cat << 'EOF' > "$clone_a/version.properties"
+version.major=1
+version.minor=2
+version.patch=5
+version.build=102
+EOF
+  git -C "$clone_a" commit -q -am "A bumps patch to 1.2.5"
+  local a_commit
+  a_commit="$(git -C "$clone_a" rev-parse HEAD)"
+
+  local rc=0
+  local out
+  out="$(cd "$clone_a" && "$GSP" --auto-resolve </dev/null 2>&1)" || rc=$?
+
+  if [[ $rc -ne 0 ]]; then
+    s_bad "gsp exited $rc (expected 0)"
+    s_diag "$(head -5 <<< "$out")"
+  else
+    s_ok "gsp synced with exit 0"
+    # Expected: semver tuple (1,3,0) > (1,2,5), build=max(101,102)=102
+    local actual_props
+    actual_props="$(cat "$clone_a/version.properties")"
+    local want_props="version.major=1
+version.minor=3
+version.patch=0
+version.build=102"
+
+    if [[ "$actual_props" == "$want_props" ]]; then
+      s_ok "semver_split tuple (1.3.0) preserved without mixing patch (1.2.5), build=102"
+    else
+      s_bad "version.properties unexpected: $actual_props"
+    fi
+
+    local num_parents
+    num_parents="$(git -C "$clone_a" rev-parse HEAD^@ 2>/dev/null | wc -w | tr -d ' ')"
+    if [[ "$num_parents" == "2" ]]; then
+      s_ok "merge commit has 2 parents"
+    else
+      s_bad "merge commit has $num_parents parents (expected 2)"
+    fi
+
+    local origin_head
+    origin_head="$(git -C "$bare" rev-parse main 2>/dev/null || true)"
+    local a_head
+    a_head="$(git -C "$clone_a" rev-parse HEAD 2>/dev/null || true)"
+    if [[ "$origin_head" == "$a_head" ]]; then
+      s_ok "origin received the push"
+    else
+      s_bad "origin main does not match A HEAD"
+    fi
+  fi
+
+  assert_zero_loss "$clone_a" "$bare" "$a_commit" "$b_commit"
+}
+
+# ==============================================================================
+# Scenario 4: Obsidian frontmatter conflict + non-overlapping body edits
+# ==============================================================================
+scenario_4() {
+  local dir="$1"
+  setup_test_repo "$dir"
+  local bare="$dir/bare.git"
+  local clone_a="$dir/clone_a"
+  local clone_b="$dir/clone_b"
+
+  cat << 'EOF' > "$clone_a/note.md"
+---
+last_modified: "2026-10-01T10:00:00+01:00"
+last_modified_env: "work"
+---
+# Note
+
+Base body line 1.
+Base body line 2.
+Base body line 3.
+EOF
+
+  cat << 'EOF' > "$clone_a/.gsp-merge.toml"
+version = 1
+auto = true
+verify_skip = ["**/*.md"]
+
+[[rule]]
+name = "last-modified"
+files = ["**/*.md"]
+frontmatter_only = true
+line = '^last_modified:\s*"(?P<value>[^"]+)"$'
+type = "timestamp"
+coupled = ['^last_modified_env:\s*"(?P<value>[^"]+)"$']
+EOF
+
+  git -C "$clone_a" add .
+  git -C "$clone_a" commit -q -m "Obsidian base"
+  git -C "$clone_a" push -q origin main
+  git -C "$clone_b" pull -q
+
+  # B edits timestamp to 2026-10-02, env home, body append at bottom
+  cat << 'EOF' > "$clone_b/note.md"
+---
+last_modified: "2026-10-02T10:00:00+01:00"
+last_modified_env: "home"
+---
+# Note
+
+Base body line 1.
+Base body line 2.
+Base body line 3.
+Added by B at bottom.
+EOF
+  git -C "$clone_b" commit -q -am "B edits timestamp and body bottom"
+  git -C "$clone_b" push -q origin main
+  local b_commit
+  b_commit="$(git -C "$clone_b" rev-parse HEAD)"
+
+  # A edits timestamp to 2026-10-03, env work, body insert at top
+  cat << 'EOF' > "$clone_a/note.md"
+---
+last_modified: "2026-10-03T10:00:00+01:00"
+last_modified_env: "work"
+---
+# Note
+
+Added by A at top.
+Base body line 1.
+Base body line 2.
+Base body line 3.
+EOF
+  git -C "$clone_a" commit -q -am "A edits timestamp and body top"
+  local a_commit
+  a_commit="$(git -C "$clone_a" rev-parse HEAD)"
+
+  # Run without --auto-resolve (auto=true in config should authorize it)
+  local rc=0
+  local out
+  out="$(cd "$clone_a" && "$GSP" </dev/null 2>&1)" || rc=$?
+
+  if [[ $rc -ne 0 ]]; then
+    s_bad "gsp exited $rc (expected 0 with auto=true)"
+    s_diag "$(head -5 <<< "$out")"
+  else
+    s_ok "gsp synced with exit 0 (auto=true consent respected)"
+    # Verify latest timestamp (2026-10-03) and coupled env (work) won
+    if grep -q 'last_modified: "2026-10-03T10:00:00+01:00"' "$clone_a/note.md" && \
+       grep -q 'last_modified_env: "work"' "$clone_a/note.md"; then
+      s_ok "latest timestamp won with coupled env (work)"
+    else
+      s_bad "frontmatter resolution unexpected: $(head -6 "$clone_a/note.md")"
+    fi
+
+    # Verify both body edits cleanly merged
+    if grep -q 'Added by A at top.' "$clone_a/note.md" && \
+       grep -q 'Added by B at bottom.' "$clone_a/note.md"; then
+      s_ok "non-overlapping body edits cleanly merged"
+    else
+      s_bad "body edits missing from merged note"
+    fi
+
+    local origin_head
+    origin_head="$(git -C "$bare" rev-parse main 2>/dev/null || true)"
+    local a_head
+    a_head="$(git -C "$clone_a" rev-parse HEAD 2>/dev/null || true)"
+    if [[ "$origin_head" == "$a_head" ]]; then
+      s_ok "origin received the push"
+    else
+      s_bad "origin main does not match A HEAD"
+    fi
+  fi
+
+  assert_zero_loss "$clone_a" "$bare" "$a_commit" "$b_commit"
+}
+
+# ==============================================================================
+# Scenario 5: Obsidian body conflict too -> abort
+# ==============================================================================
+scenario_5() {
+  local dir="$1"
+  setup_test_repo "$dir"
+  local bare="$dir/bare.git"
+  local clone_a="$dir/clone_a"
+  local clone_b="$dir/clone_b"
+
+  cat << 'EOF' > "$clone_a/note.md"
+---
+last_modified: "2026-10-01T10:00:00+01:00"
+last_modified_env: "work"
+---
+# Note
+
+Base body line 1.
+Base body line 2.
+Base body line 3.
+EOF
+
+  cat << 'EOF' > "$clone_a/.gsp-merge.toml"
+version = 1
+auto = true
+[[rule]]
+name = "last-modified"
+files = ["**/*.md"]
+frontmatter_only = true
+line = '^last_modified:\s*"(?P<value>[^"]+)"$'
+type = "timestamp"
+coupled = ['^last_modified_env:\s*"(?P<value>[^"]+)"$']
+EOF
+
+  git -C "$clone_a" add .
+  git -C "$clone_a" commit -q -m "Obsidian base"
+  git -C "$clone_a" push -q origin main
+  git -C "$clone_b" pull -q
+
+  # B edits timestamp AND edits body line 2 to Conflict B
+  cat << 'EOF' > "$clone_b/note.md"
+---
+last_modified: "2026-10-02T10:00:00+01:00"
+last_modified_env: "home"
+---
+# Note
+
+Base body line 1.
+Conflict from B.
+Base body line 3.
+EOF
+  git -C "$clone_b" commit -q -am "B edits body line 2"
+  git -C "$clone_b" push -q origin main
+  local b_commit
+  b_commit="$(git -C "$clone_b" rev-parse HEAD)"
+
+  # A edits timestamp AND edits body line 2 to Conflict A
+  cat << 'EOF' > "$clone_a/note.md"
+---
+last_modified: "2026-10-03T10:00:00+01:00"
+last_modified_env: "work"
+---
+# Note
+
+Base body line 1.
+Conflict from A.
+Base body line 3.
+EOF
+  git -C "$clone_a" commit -q -am "A edits body line 2"
+  local a_commit
+  a_commit="$(git -C "$clone_a" rev-parse HEAD)"
+
+  echo "local-tracked-edit" >> "$clone_a/init.txt"
+  echo "local-untracked-file" > "$clone_a/untracked.txt"
+  local want_tracked
+  want_tracked="$(cat "$clone_a/init.txt")"
+  local want_untracked
+  want_untracked="$(cat "$clone_a/untracked.txt")"
+  local pre_head="$a_commit"
+  local pre_note
+  pre_note="$(cat "$clone_a/note.md")"
+
+  local rc=0
+  local out
+  out="$(cd "$clone_a" && "$GSP" --auto-resolve </dev/null 2>&1)" || rc=$?
+
+  if [[ $rc -eq 1 ]]; then
+    s_ok "aborted with exit code 1"
+  else
+    s_bad "expected exit code 1 on body conflict, got $rc"
+  fi
+
+  local current_head
+  current_head="$(git -C "$clone_a" rev-parse HEAD)"
+  if [[ "$current_head" == "$pre_head" ]]; then
+    s_ok "HEAD unchanged at PRE_HEAD"
+  else
+    s_bad "HEAD moved from PRE_HEAD"
+  fi
+
+  local current_note
+  current_note="$(cat "$clone_a/note.md")"
+  if [[ "$current_note" == "$pre_note" ]]; then
+    s_ok "worktree note.md untouched"
+  else
+    s_bad "worktree note.md was modified"
+  fi
+
+  assert_zero_loss "$clone_a" "$bare" "$a_commit" "$b_commit"
+  assert_uncommitted_preserved "$clone_a" "init.txt" "$want_tracked" "untracked.txt" "$want_untracked"
+}
+
+# ==============================================================================
+# Scenario 6: Non-TTY without consent -> abort; with --auto-resolve -> resolved
+# ==============================================================================
+scenario_6() {
+  local dir="$1"
+  setup_test_repo "$dir"
+  local bare="$dir/bare.git"
+  local clone_a="$dir/clone_a"
+  local clone_b="$dir/clone_b"
+
+  cat << 'EOF' > "$clone_a/version.go"
+package main
+
+const (
+	EnvoyVersionCode = 115
+)
+EOF
+
+  cat << 'EOF' > "$clone_a/.gsp-merge.toml"
+version = 1
+auto = false
+[[rule]]
+name = "envoy-version-code"
+files = ["**/version.go"]
+line = '^\s*EnvoyVersionCode\s*=\s*(?P<value>\d+)\s*$'
+type = "counter"
+EOF
+
+  git -C "$clone_a" add .
+  git -C "$clone_a" commit -q -m "Base setup"
+  git -C "$clone_a" push -q origin main
+  git -C "$clone_b" pull -q
+
+  # B bumps to 116
+  sed -i '' 's/EnvoyVersionCode = 115/EnvoyVersionCode = 116/' "$clone_b/version.go" 2>/dev/null || \
+    sed -i 's/EnvoyVersionCode = 115/EnvoyVersionCode = 116/' "$clone_b/version.go"
+  git -C "$clone_b" commit -q -am "B bumps to 116"
+  git -C "$clone_b" push -q origin main
+  local b_commit
+  b_commit="$(git -C "$clone_b" rev-parse HEAD)"
+
+  # A bumps to 117
+  sed -i '' 's/EnvoyVersionCode = 115/EnvoyVersionCode = 117/' "$clone_a/version.go" 2>/dev/null || \
+    sed -i 's/EnvoyVersionCode = 115/EnvoyVersionCode = 117/' "$clone_a/version.go"
+  git -C "$clone_a" commit -q -am "A bumps to 117"
+  local a_commit
+  a_commit="$(git -C "$clone_a" rev-parse HEAD)"
+
+  echo "local-tracked-edit" >> "$clone_a/init.txt"
+  echo "local-untracked-file" > "$clone_a/untracked.txt"
+  local want_tracked
+  want_tracked="$(cat "$clone_a/init.txt")"
+  local want_untracked
+  want_untracked="$(cat "$clone_a/untracked.txt")"
+  local pre_head="$a_commit"
+
+  # Step 1: Run non-interactively without consent
+  local rc=0
+  local out
+  out="$(cd "$clone_a" && "$GSP" </dev/null 2>&1)" || rc=$?
+
+  if [[ $rc -eq 1 ]]; then
+    s_ok "non-TTY without consent aborted with exit 1"
+  else
+    s_bad "expected exit 1 without consent, got $rc"
+  fi
+
+  local current_head
+  current_head="$(git -C "$clone_a" rev-parse HEAD)"
+  if [[ "$current_head" == "$pre_head" ]]; then
+    s_ok "HEAD unchanged at PRE_HEAD"
+  else
+    s_bad "HEAD moved on non-consent abort"
+  fi
+
+  assert_zero_loss "$clone_a" "$bare" "$a_commit" "$b_commit"
+  assert_uncommitted_preserved "$clone_a" "init.txt" "$want_tracked" "untracked.txt" "$want_untracked"
+
+  # Step 2: Run with --auto-resolve
+  rc=0
+  out="$(cd "$clone_a" && "$GSP" --auto-resolve </dev/null 2>&1)" || rc=$?
+
+  if [[ $rc -eq 0 ]]; then
+    s_ok "run with --auto-resolve succeeded with exit 0"
+    if grep -q 'EnvoyVersionCode = 117' "$clone_a/version.go"; then
+      s_ok "resolved value is 117"
+    else
+      s_bad "version.go missing 117"
+    fi
+
+    local origin_head
+    origin_head="$(git -C "$bare" rev-parse main 2>/dev/null || true)"
+    local a_head
+    a_head="$(git -C "$clone_a" rev-parse HEAD 2>/dev/null || true)"
+    if [[ "$origin_head" == "$a_head" ]]; then
+      s_ok "origin received the push"
+    else
+      s_bad "origin main does not match A HEAD"
+    fi
+  else
+    s_bad "expected exit 0 with --auto-resolve, got $rc"
+  fi
+
+  assert_zero_loss "$clone_a" "$bare" "$a_commit" "$b_commit"
+}
+
+# ==============================================================================
+# Scenario 7: script/test failure -> rollback; merge parked at refs/gsp/failed/*
+# ==============================================================================
+scenario_7() {
+  local dir="$1"
+  setup_test_repo "$dir"
+  local bare="$dir/bare.git"
+  local clone_a="$dir/clone_a"
+  local clone_b="$dir/clone_b"
+
+  # Failing script/test
+  cat << 'EOF' > "$clone_a/script/test"
+#!/usr/bin/env bash
+echo "Failing verify test" >&2
+exit 1
+EOF
+  chmod +x "$clone_a/script/test"
+
+  cat << 'EOF' > "$clone_a/version.go"
+package main
+
+const (
+	EnvoyVersionCode = 115
+)
+EOF
+
+  cat << 'EOF' > "$clone_a/.gsp-merge.toml"
+version = 1
+[[rule]]
+name = "envoy-version-code"
+files = ["**/version.go"]
+line = '^\s*EnvoyVersionCode\s*=\s*(?P<value>\d+)\s*$'
+type = "counter"
+EOF
+
+  git -C "$clone_a" add .
+  git -C "$clone_a" commit -q -m "Base with failing test"
+  git -C "$clone_a" push -q origin main
+  git -C "$clone_b" pull -q
+
+  # B bumps to 116
+  sed -i '' 's/EnvoyVersionCode = 115/EnvoyVersionCode = 116/' "$clone_b/version.go" 2>/dev/null || \
+    sed -i 's/EnvoyVersionCode = 115/EnvoyVersionCode = 116/' "$clone_b/version.go"
+  git -C "$clone_b" commit -q -am "B bumps to 116"
+  git -C "$clone_b" push -q origin main
+  local b_commit
+  b_commit="$(git -C "$clone_b" rev-parse HEAD)"
+
+  # A bumps to 117
+  sed -i '' 's/EnvoyVersionCode = 115/EnvoyVersionCode = 117/' "$clone_a/version.go" 2>/dev/null || \
+    sed -i 's/EnvoyVersionCode = 115/EnvoyVersionCode = 117/' "$clone_a/version.go"
+  git -C "$clone_a" commit -q -am "A bumps to 117"
+  local a_commit
+  a_commit="$(git -C "$clone_a" rev-parse HEAD)"
+
+  echo "local-tracked-edit" >> "$clone_a/init.txt"
+  echo "local-untracked-file" > "$clone_a/untracked.txt"
+  local want_tracked
+  want_tracked="$(cat "$clone_a/init.txt")"
+  local want_untracked
+  want_untracked="$(cat "$clone_a/untracked.txt")"
+  local pre_head="$a_commit"
+
+  local rc=0
+  local out
+  out="$(cd "$clone_a" && "$GSP" --auto-resolve </dev/null 2>&1)" || rc=$?
+
+  if [[ $rc -eq 1 ]]; then
+    s_ok "verify failure rolled back with exit 1"
+  else
+    s_bad "expected exit 1 on verify failure, got $rc"
+  fi
+
+  local current_head
+  current_head="$(git -C "$clone_a" rev-parse HEAD)"
+  if [[ "$current_head" == "$pre_head" ]]; then
+    s_ok "HEAD rolled back to PRE_HEAD"
+  else
+    s_bad "HEAD not at PRE_HEAD: was $pre_head, now $current_head"
+  fi
+
+  # Origin not pushed
+  local origin_head
+  origin_head="$(git -C "$bare" rev-parse main)"
+  if [[ "$origin_head" == "$b_commit" ]]; then
+    s_ok "origin main remained unpushed"
+  else
+    s_bad "origin main moved unexpectedly"
+  fi
+
+  # Check that failed merge ref exists: refs/gsp/failed/*
+  local failed_ref
+  failed_ref="$(git -C "$clone_a" for-each-ref --format='%(refname)' refs/gsp/failed/ | tail -1)"
+  if [[ -n "$failed_ref" ]]; then
+    s_ok "failed merge commit preserved at $failed_ref"
+    local num_parents
+    num_parents="$(git -C "$clone_a" rev-parse "${failed_ref}^@" 2>/dev/null | wc -w | tr -d ' ')"
+    if [[ "$num_parents" == "2" ]]; then
+      s_ok "parked failed commit has 2 parents"
+    else
+      s_bad "parked failed commit has $num_parents parents (expected 2)"
+    fi
+  else
+    s_bad "no refs/gsp/failed/* ref found"
+  fi
+
+  assert_zero_loss "$clone_a" "$bare" "$a_commit" "$b_commit"
+  assert_uncommitted_preserved "$clone_a" "init.txt" "$want_tracked" "untracked.txt" "$want_untracked"
+}
+
+# ==============================================================================
+# Scenario 8: SIGINT injected between commit-tree and ff -> PRE_HEAD + stash
+# ==============================================================================
+scenario_8() {
+  local dir="$1"
+  setup_test_repo "$dir"
+  local bare="$dir/bare.git"
+  local clone_a="$dir/clone_a"
+  local clone_b="$dir/clone_b"
+
+  cat << 'EOF' > "$clone_a/version.go"
+package main
+
+const (
+	EnvoyVersionCode = 115
+)
+EOF
+
+  cat << 'EOF' > "$clone_a/.gsp-merge.toml"
+version = 1
+[[rule]]
+name = "envoy-version-code"
+files = ["**/version.go"]
+line = '^\s*EnvoyVersionCode\s*=\s*(?P<value>\d+)\s*$'
+type = "counter"
+EOF
+
+  git -C "$clone_a" add .
+  git -C "$clone_a" commit -q -m "Base setup"
+  git -C "$clone_a" push -q origin main
+  git -C "$clone_b" pull -q
+
+  sed -i '' 's/EnvoyVersionCode = 115/EnvoyVersionCode = 116/' "$clone_b/version.go" 2>/dev/null || \
+    sed -i 's/EnvoyVersionCode = 115/EnvoyVersionCode = 116/' "$clone_b/version.go"
+  git -C "$clone_b" commit -q -am "B bumps to 116"
+  git -C "$clone_b" push -q origin main
+  local b_commit
+  b_commit="$(git -C "$clone_b" rev-parse HEAD)"
+
+  sed -i '' 's/EnvoyVersionCode = 115/EnvoyVersionCode = 117/' "$clone_a/version.go" 2>/dev/null || \
+    sed -i 's/EnvoyVersionCode = 115/EnvoyVersionCode = 117/' "$clone_a/version.go"
+  git -C "$clone_a" commit -q -am "A bumps to 117"
+  local a_commit
+  a_commit="$(git -C "$clone_a" rev-parse HEAD)"
+
+  echo "local-tracked-edit" >> "$clone_a/init.txt"
+  echo "local-untracked-file" > "$clone_a/untracked.txt"
+  local want_tracked
+  want_tracked="$(cat "$clone_a/init.txt")"
+  local want_untracked
+  want_untracked="$(cat "$clone_a/untracked.txt")"
+  local pre_head="$a_commit"
+
+  # Interceptor wrapper for git to trigger SIGINT right before ff-only
+  local wrap_dir="$dir/wrap"
+  mkdir -p "$wrap_dir"
+  local real_git
+  real_git="$(which git)"
+
+  cat << EOF > "$wrap_dir/git"
+#!/usr/bin/env bash
+if [[ ! -f "$dir/wrap_triggered" && "\$1" == "merge" && "\$2" == "--ff-only" ]]; then
+  echo "triggered" > "$dir/wrap_triggered"
+  curr=\$\$
+  while [[ -n "\$curr" && "\$curr" -gt 1 ]]; do
+    ppid=\$(ps -o ppid= -p "\$curr" 2>/dev/null | tr -d ' ')
+    cmd=\$(ps -o args= -p "\$ppid" 2>/dev/null || true)
+    if [[ "\$cmd" == *"git-safe-pull"* ]]; then
+      kill -INT "\$ppid" 2>/dev/null
+      break
+    fi
+    curr="\$ppid"
+  done
+  sleep 2
+  exit 1
+fi
+exec "$real_git" "\$@"
+EOF
+  chmod +x "$wrap_dir/git"
+
+  local rc=0
+  local out
+  out="$(cd "$clone_a" && PATH="$wrap_dir:$PATH" "$GSP" --auto-resolve </dev/null 2>&1)" || rc=$?
+
+  if [[ ! -f "$dir/wrap_triggered" ]]; then
+    s_bad "git merge --ff-only was never invoked (resolution or pre-flight not reached)"
+  else
+    s_ok "SIGINT interceptor triggered at merge --ff-only"
+  fi
+
+  if [[ $rc -ne 0 ]]; then
+    s_ok "interrupted execution exited non-zero ($rc)"
+  else
+    s_bad "gsp unexpectedly exited 0 after SIGINT"
+  fi
+
+  local current_head
+  current_head="$(git -C "$clone_a" rev-parse HEAD)"
+  if [[ "$current_head" == "$pre_head" ]]; then
+    s_ok "HEAD rolled back to PRE_HEAD"
+  else
+    s_bad "HEAD was not restored to PRE_HEAD"
+  fi
+
+  [[ -n "${GSP_TEST_DEBUG:-}" ]] && while IFS= read -r l; do s_diag "$l"; done <<< "$out"
+  assert_zero_loss "$clone_a" "$bare" "$a_commit" "$b_commit"
+  assert_uncommitted_preserved "$clone_a" "init.txt" "$want_tracked" "untracked.txt" "$want_untracked"
+}
+
+# ==============================================================================
+# Scenario 9: Push race: remote advances between verify and push -> retry succeeds
+# ==============================================================================
+scenario_9() {
+  local dir="$1"
+  setup_test_repo "$dir"
+  local bare="$dir/bare.git"
+  local clone_a="$dir/clone_a"
+  local clone_b="$dir/clone_b"
+
+  cat << 'EOF' > "$clone_a/version.go"
+package main
+
+const (
+	EnvoyVersionCode = 115
+)
+EOF
+
+  cat << 'EOF' > "$clone_a/.gsp-merge.toml"
+version = 1
+[[rule]]
+name = "envoy-version-code"
+files = ["**/version.go"]
+line = '^\s*EnvoyVersionCode\s*=\s*(?P<value>\d+)\s*$'
+type = "counter"
+EOF
+
+  # script/test in clone_a pushes from B on its first run to simulate a push race
+  cat << EOF > "$clone_a/script/test"
+#!/usr/bin/env bash
+if [[ ! -f "$dir/race_marker" ]]; then
+  touch "$dir/race_marker"
+  echo "race content" > "$clone_b/race.txt"
+  git -C "$clone_b" add race.txt
+  git -C "$clone_b" commit -q -m "B race commit"
+  git -C "$clone_b" push -q origin main
+fi
+exit 0
+EOF
+  chmod +x "$clone_a/script/test"
+
+  git -C "$clone_a" add .
+  git -C "$clone_a" commit -q -m "Base setup with race probe in script/test"
+  git -C "$clone_a" push -q origin main
+  git -C "$clone_b" pull -q
+
+  # B bumps to 116 and pushes
+  sed -i '' 's/EnvoyVersionCode = 115/EnvoyVersionCode = 116/' "$clone_b/version.go" 2>/dev/null || \
+    sed -i 's/EnvoyVersionCode = 115/EnvoyVersionCode = 116/' "$clone_b/version.go"
+  git -C "$clone_b" commit -q -am "B bumps to 116"
+  git -C "$clone_b" push -q origin main
+  local b_commit
+  b_commit="$(git -C "$clone_b" rev-parse HEAD)"
+
+  # A bumps to 117
+  sed -i '' 's/EnvoyVersionCode = 115/EnvoyVersionCode = 117/' "$clone_a/version.go" 2>/dev/null || \
+    sed -i 's/EnvoyVersionCode = 115/EnvoyVersionCode = 117/' "$clone_a/version.go"
+  git -C "$clone_a" commit -q -am "A bumps to 117"
+  local a_commit
+  a_commit="$(git -C "$clone_a" rev-parse HEAD)"
+
+  local rc=0
+  local out
+  out="$(cd "$clone_a" && "$GSP" --auto-resolve </dev/null 2>&1)" || rc=$?
+
+  if [[ $rc -eq 0 ]]; then
+    s_ok "push race handled cleanly with exit 0 on retry"
+    # Check that rejected first attempt was parked at refs/gsp/unpushed/*
+    local unpushed_ref
+    unpushed_ref="$(git -C "$clone_a" for-each-ref --format='%(refname)' refs/gsp/unpushed/ | tail -1)"
+    if [[ -n "$unpushed_ref" ]]; then
+      s_ok "rejected first merge commit parked at $unpushed_ref"
+    else
+      s_bad "no refs/gsp/unpushed/* ref found for non-ff reject"
+    fi
+
+    # Origin should have the final merged commit containing both B's race edit and A's bump
+    local origin_head
+    origin_head="$(git -C "$bare" rev-parse main 2>/dev/null || true)"
+    local a_head
+    a_head="$(git -C "$clone_a" rev-parse HEAD 2>/dev/null || true)"
+    if [[ "$origin_head" == "$a_head" ]]; then
+      s_ok "origin main matches A HEAD"
+    else
+      s_bad "origin main does not match A HEAD"
+    fi
+  else
+    s_bad "expected exit 0 after retry, got $rc"
+    s_diag "$(head -5 <<< "$out")"
+  fi
+
+  local b_race_commit
+  b_race_commit="$(git -C "$clone_b" rev-parse HEAD)"
+  assert_zero_loss "$clone_a" "$bare" "$a_commit" "$b_commit" "$b_race_commit"
+}
+
+# ==============================================================================
+# Scenario 10: Locked credentials, no TTY -> exit 4 within 5s, repo unchanged
+# ==============================================================================
+scenario_10() {
+  local dir="$1"
+  setup_test_repo "$dir"
+  local bare="$dir/bare.git"
+  local clone_a="$dir/clone_a"
+  local clone_b="$dir/clone_b"
+
+  cat << 'EOF' > "$clone_a/version.go"
+package main
+
+const (
+	EnvoyVersionCode = 115
+)
+EOF
+
+  cat << 'EOF' > "$clone_a/.gsp-merge.toml"
+version = 1
+[[rule]]
+name = "envoy-version-code"
+files = ["**/version.go"]
+line = '^\s*EnvoyVersionCode\s*=\s*(?P<value>\d+)\s*$'
+type = "counter"
+EOF
+
+  git -C "$clone_a" add .
+  git -C "$clone_a" commit -q -m "Base setup"
+  git -C "$clone_a" push -q origin main
+  git -C "$clone_b" pull -q
+
+  # B bumps to 116 and pushes
+  sed -i '' 's/EnvoyVersionCode = 115/EnvoyVersionCode = 116/' "$clone_b/version.go" 2>/dev/null || \
+    sed -i 's/EnvoyVersionCode = 115/EnvoyVersionCode = 116/' "$clone_b/version.go"
+  git -C "$clone_b" commit -q -am "B bumps to 116"
+  git -C "$clone_b" push -q origin main
+  local b_commit
+  b_commit="$(git -C "$clone_b" rev-parse HEAD)"
+
+  # A bumps to 117 (committed with --no-gpg-sign so local is ahead)
+  sed -i '' 's/EnvoyVersionCode = 115/EnvoyVersionCode = 117/' "$clone_a/version.go" 2>/dev/null || \
+    sed -i 's/EnvoyVersionCode = 115/EnvoyVersionCode = 117/' "$clone_a/version.go"
+  git -C "$clone_a" commit --no-gpg-sign -q -am "A bumps to 117"
+  local a_commit
+  a_commit="$(git -C "$clone_a" rev-parse HEAD)"
+
+  # Generate passphrase-protected key
+  local keypath="$dir/test_ssh_key"
+  ssh-keygen -q -t ed25519 -N "secret-passphrase" -f "$keypath"
+
+  # Configure SSH signing with locked key in clone_a
+  git -C "$clone_a" config commit.gpgsign true
+  git -C "$clone_a" config gpg.format ssh
+  git -C "$clone_a" config user.signingkey "${keypath}.pub"
+
+  echo "local-tracked-edit" >> "$clone_a/init.txt"
+  echo "local-untracked-file" > "$clone_a/untracked.txt"
+  local want_tracked
+  want_tracked="$(cat "$clone_a/init.txt")"
+  local want_untracked
+  want_untracked="$(cat "$clone_a/untracked.txt")"
+  local pre_head="$a_commit"
+
+  local t0
+  t0="$(python3 -c 'import time; print(time.perf_counter())')"
+  local rc=0
+  local out
+  out="$(cd "$clone_a" && env -u SSH_AUTH_SOCK SSH_AUTH_SOCK="" "$GSP" --auto-resolve </dev/null 2>&1)" || rc=$?
+  local t1
+  t1="$(python3 -c 'import time; print(time.perf_counter())')"
+  local elapsed
+  elapsed="$(python3 -c "print($t1 - $t0)")"
+
+  if [[ $rc -eq 4 ]]; then
+    s_ok "credentials probe failed fast with exit 4"
+  else
+    s_bad "expected exit 4 on locked key, got $rc"
+    s_diag "$(head -5 <<< "$out")"
+  fi
+
+  local under_5s
+  under_5s="$(python3 -c "print('yes' if $elapsed < 5.0 else 'no')")"
+  if [[ "$under_5s" == "yes" ]]; then
+    s_ok "probe completed in ${elapsed}s (< 5.0s, no hang)"
+  else
+    s_bad "probe took ${elapsed}s (expected < 5.0s)"
+  fi
+
+  local current_head
+  current_head="$(git -C "$clone_a" rev-parse HEAD)"
+  if [[ "$current_head" == "$pre_head" ]]; then
+    s_ok "HEAD unchanged at PRE_HEAD"
+  else
+    s_bad "HEAD was modified"
+  fi
+
+  assert_zero_loss "$clone_a" "$bare" "$a_commit" "$b_commit"
+  assert_uncommitted_preserved "$clone_a" "init.txt" "$want_tracked" "untracked.txt" "$want_untracked"
+}
+
+# ==============================================================================
+# Scenario 11: Push fails after auto-resolve -> parked, exit 3; fresh retry
+# ==============================================================================
+scenario_11() {
+  local dir="$1"
+  setup_test_repo "$dir"
+  local bare="$dir/bare.git"
+  local clone_a="$dir/clone_a"
+  local clone_b="$dir/clone_b"
+
+  cat << 'EOF' > "$clone_a/version.go"
+package main
+
+const (
+	EnvoyVersionCode = 115
+)
+EOF
+
+  cat << 'EOF' > "$clone_a/.gsp-merge.toml"
+version = 1
+[[rule]]
+name = "envoy-version-code"
+files = ["**/version.go"]
+line = '^\s*EnvoyVersionCode\s*=\s*(?P<value>\d+)\s*$'
+type = "counter"
+EOF
+
+  git -C "$clone_a" add .
+  git -C "$clone_a" commit -q -m "Base setup"
+  git -C "$clone_a" push -q origin main
+  git -C "$clone_b" pull -q
+
+  # B bumps to 116 and pushes
+  sed -i '' 's/EnvoyVersionCode = 115/EnvoyVersionCode = 116/' "$clone_b/version.go" 2>/dev/null || \
+    sed -i 's/EnvoyVersionCode = 115/EnvoyVersionCode = 116/' "$clone_b/version.go"
+  git -C "$clone_b" commit -q -am "B bumps to 116"
+  git -C "$clone_b" push -q origin main
+  local b_commit
+  b_commit="$(git -C "$clone_b" rev-parse HEAD)"
+
+  # A bumps to 117
+  sed -i '' 's/EnvoyVersionCode = 115/EnvoyVersionCode = 117/' "$clone_a/version.go" 2>/dev/null || \
+    sed -i 's/EnvoyVersionCode = 115/EnvoyVersionCode = 117/' "$clone_a/version.go"
+  git -C "$clone_a" commit -q -am "A bumps to 117"
+  local a_commit
+  a_commit="$(git -C "$clone_a" rev-parse HEAD)"
+
+  echo "local-tracked-edit" >> "$clone_a/init.txt"
+  echo "local-untracked-file" > "$clone_a/untracked.txt"
+  local want_tracked
+  want_tracked="$(cat "$clone_a/init.txt")"
+  local want_untracked
+  want_untracked="$(cat "$clone_a/untracked.txt")"
+  local pre_head="$a_commit"
+
+  # Make bare remote reject push via pre-receive hook
+  mkdir -p "$bare/hooks"
+  cat << 'EOF' > "$bare/hooks/pre-receive"
+#!/usr/bin/env bash
+echo "Remote rejected push" >&2
+exit 1
+EOF
+  chmod +x "$bare/hooks/pre-receive"
+
+  local rc=0
+  local out
+  out="$(cd "$clone_a" && "$GSP" --auto-resolve </dev/null 2>&1)" || rc=$?
+
+  if [[ $rc -eq 3 ]]; then
+    s_ok "push failure after auto-resolve exited 3"
+  else
+    s_bad "expected exit 3 on push failure, got $rc"
+    s_diag "$(head -5 <<< "$out")"
+  fi
+
+  local current_head
+  current_head="$(git -C "$clone_a" rev-parse HEAD)"
+  if [[ "$current_head" == "$pre_head" ]]; then
+    s_ok "HEAD rolled back to PRE_HEAD"
+  else
+    s_bad "HEAD not at PRE_HEAD"
+  fi
+
+  local unpushed_ref
+  unpushed_ref="$(git -C "$clone_a" for-each-ref --format='%(refname)' refs/gsp/unpushed/ | tail -1)"
+  if [[ -n "$unpushed_ref" ]]; then
+    s_ok "unpushed merge parked at $unpushed_ref"
+  else
+    s_bad "no refs/gsp/unpushed/* ref found"
+  fi
+
+  assert_zero_loss "$clone_a" "$bare" "$a_commit" "$b_commit"
+  assert_uncommitted_preserved "$clone_a" "init.txt" "$want_tracked" "untracked.txt" "$want_untracked"
+
+  # Restore bare remote and re-run
+  rm -f "$bare/hooks/pre-receive"
+  rc=0
+  out="$(cd "$clone_a" && "$GSP" --auto-resolve </dev/null 2>&1)" || rc=$?
+
+  if [[ $rc -eq 0 ]]; then
+    s_ok "re-run after restoring remote synced with exit 0"
+    # Check that new HEAD does NOT stack on parked merge
+    if [[ -n "$unpushed_ref" ]]; then
+      local parked_sha
+      parked_sha="$(git -C "$clone_a" rev-parse "$unpushed_ref")"
+      if git -C "$clone_a" merge-base --is-ancestor "$parked_sha" HEAD 2>/dev/null; then
+        s_bad "stacked merge detected: parked commit is in new HEAD history"
+      else
+        s_ok "no stacked merge: parked commit not in new HEAD history"
+      fi
+    fi
+
+    local num_parents
+    num_parents="$(git -C "$clone_a" rev-parse HEAD^@ 2>/dev/null | wc -w | tr -d ' ')"
+    if [[ "$num_parents" == "2" ]]; then
+      s_ok "fresh merge commit has exactly 2 parents"
+    else
+      s_bad "fresh merge commit has $num_parents parents (expected 2)"
+    fi
+  else
+    s_bad "expected exit 0 on re-run, got $rc"
+  fi
+
+  assert_zero_loss "$clone_a" "$bare" "$a_commit" "$b_commit"
+}
+
+# ==============================================================================
+# Scenario 12: --no-push with auto-resolve -> merge kept locally, exit 0
+# ==============================================================================
+scenario_12() {
+  local dir="$1"
+  setup_test_repo "$dir"
+  local bare="$dir/bare.git"
+  local clone_a="$dir/clone_a"
+  local clone_b="$dir/clone_b"
+
+  cat << 'EOF' > "$clone_a/version.go"
+package main
+
+const (
+	EnvoyVersionCode = 115
+)
+EOF
+
+  cat << 'EOF' > "$clone_a/.gsp-merge.toml"
+version = 1
+[[rule]]
+name = "envoy-version-code"
+files = ["**/version.go"]
+line = '^\s*EnvoyVersionCode\s*=\s*(?P<value>\d+)\s*$'
+type = "counter"
+EOF
+
+  git -C "$clone_a" add .
+  git -C "$clone_a" commit -q -m "Base setup"
+  git -C "$clone_a" push -q origin main
+  git -C "$clone_b" pull -q
+
+  sed -i '' 's/EnvoyVersionCode = 115/EnvoyVersionCode = 116/' "$clone_b/version.go" 2>/dev/null || \
+    sed -i 's/EnvoyVersionCode = 115/EnvoyVersionCode = 116/' "$clone_b/version.go"
+  git -C "$clone_b" commit -q -am "B bumps to 116"
+  git -C "$clone_b" push -q origin main
+  local b_commit
+  b_commit="$(git -C "$clone_b" rev-parse HEAD)"
+
+  sed -i '' 's/EnvoyVersionCode = 115/EnvoyVersionCode = 117/' "$clone_a/version.go" 2>/dev/null || \
+    sed -i 's/EnvoyVersionCode = 115/EnvoyVersionCode = 117/' "$clone_a/version.go"
+  git -C "$clone_a" commit -q -am "A bumps to 117"
+  local a_commit
+  a_commit="$(git -C "$clone_a" rev-parse HEAD)"
+
+  local origin_before
+  origin_before="$(git -C "$bare" rev-parse main)"
+
+  local rc=0
+  local out
+  out="$(cd "$clone_a" && "$GSP" --auto-resolve --no-push </dev/null 2>&1)" || rc=$?
+
+  if [[ $rc -eq 0 ]]; then
+    s_ok "--no-push auto-resolve succeeded with exit 0"
+    local num_parents
+    num_parents="$(git -C "$clone_a" rev-parse HEAD^@ 2>/dev/null | wc -w | tr -d ' ')"
+    if [[ "$num_parents" == "2" ]]; then
+      s_ok "merge commit kept locally (2 parents)"
+    else
+      s_bad "expected local merge commit with 2 parents, got $num_parents"
+    fi
+
+    local origin_after
+    origin_after="$(git -C "$bare" rev-parse main)"
+    if [[ "$origin_after" == "$origin_before" ]]; then
+      s_ok "origin main remained unpushed"
+    else
+      s_bad "origin main moved despite --no-push"
+    fi
+
+    if grep -qi -e 'unpushed' -e 'stack' -e 'no-push' <<< "$out"; then
+      s_ok "warning printed about unpushed merge / stacking"
+    else
+      s_bad "warning about unpushed merge missing from output"
+    fi
+  else
+    s_bad "expected exit 0 with --no-push, got $rc"
+    s_diag "$(head -5 <<< "$out")"
+  fi
+
+  assert_zero_loss "$clone_a" "$bare" "$a_commit" "$b_commit"
+}
+
+# ==============================================================================
+# Scenario 13: Timing: up-to-date path with warm verify cache under 0.3s
+# ==============================================================================
+scenario_13() {
+  local dir="$1"
+  setup_test_repo "$dir"
+  local bare="$dir/bare.git"
+  local clone_a="$dir/clone_a"
+
+  cat << 'EOF' > "$clone_a/version.go"
+package main
+
+const (
+	EnvoyVersionCode = 115
+)
+EOF
+
+  cat << 'EOF' > "$clone_a/.gsp-merge.toml"
+version = 1
+[[rule]]
+name = "envoy-version-code"
+files = ["**/version.go"]
+line = '^\s*EnvoyVersionCode\s*=\s*(?P<value>\d+)\s*$'
+type = "counter"
+EOF
+
+  git -C "$clone_a" add .
+  git -C "$clone_a" commit -q -m "Base setup"
+  git -C "$clone_a" push -q origin main
+
+  # First run: warm up verify cache
+  local rc=0
+  local out
+  out="$(cd "$clone_a" && "$GSP" </dev/null 2>&1)" || rc=$?
+  if [[ $rc -ne 0 ]]; then
+    s_bad "initial gsp run exited $rc"
+    s_diag "$(head -5 <<< "$out")"
+    return
+  fi
+
+  # Second run: measure warm cache timing
+  local t0
+  t0="$(python3 -c 'import time; print(time.perf_counter())')"
+  out="$(cd "$clone_a" && "$GSP" </dev/null 2>&1)" || rc=$?
+  local t1
+  t1="$(python3 -c 'import time; print(time.perf_counter())')"
+  local elapsed
+  elapsed="$(python3 -c "print($t1 - $t0)")"
+
+  if [[ $rc -eq 0 ]]; then
+    s_ok "up-to-date run succeeded with exit 0"
+  else
+    s_bad "up-to-date run exited $rc"
+  fi
+
+  local under_300ms
+  under_300ms="$(python3 -c "print('yes' if $elapsed < 0.30 else 'no')")"
+  if [[ "$under_300ms" == "yes" ]]; then
+    s_ok "warm cache up-to-date path completed in ${elapsed}s (< 0.30s)"
+  else
+    s_bad "warm cache path took ${elapsed}s (expected < 0.30s)"
+  fi
+
+  # Verify cache file exists
+  if [[ -f "$clone_a/.git/gsp/verified" ]]; then
+    s_ok "verify cache file exists at .git/gsp/verified"
+  else
+    s_bad "verify cache file .git/gsp/verified not found"
+  fi
+
+  local a_commit
+  a_commit="$(git -C "$clone_a" rev-parse HEAD)"
+  assert_zero_loss "$clone_a" "$bare" "$a_commit"
+}
+
+# ==============================================================================
+# Scenario 14: no re-resolution loop. Once an auto-resolved merge is pushed,
+# the other machine fast-forwards (no resolution), a re-run is a no-op, and
+# later independent edits rebase cleanly: origin ends with exactly one merge.
+# ==============================================================================
+scenario_14() {
+  local dir="$1"
+  setup_test_repo "$dir"
+  local bare="$dir/bare.git"
+  local clone_a="$dir/clone_a"
+  local clone_b="$dir/clone_b"
+  local sedi=(sed -i '')
+  sed --version >/dev/null 2>&1 && sedi=(sed -i)
+
+  printf 'const (\n\tEnvoyVersionCode = 115\n)\n' > "$clone_a/version.go"
+  cat << 'EOF' > "$clone_a/.gsp-merge.toml"
+version = 1
+[[rule]]
+name = "envoy-version-code"
+files = ["**/version.go"]
+line = '^\s*EnvoyVersionCode\s*=\s*(?P<value>\d+)\s*$'
+type = "counter"
+EOF
+  git -C "$clone_a" add .
+  git -C "$clone_a" commit -q -m "Base setup"
+  git -C "$clone_a" push -q origin main
+  git -C "$clone_b" pull -q
+
+  # Concurrent bumps; B pushes first, A auto-resolves and pushes the merge
+  "${sedi[@]}" 's/= 115/= 116/' "$clone_b/version.go"; git -C "$clone_b" commit -q -am "B bumps to 116"
+  git -C "$clone_b" push -q origin main
+  local b_commit; b_commit="$(git -C "$clone_b" rev-parse HEAD)"
+  "${sedi[@]}" 's/= 115/= 117/' "$clone_a/version.go"; git -C "$clone_a" commit -q -am "A bumps to 117"
+  local a_commit; a_commit="$(git -C "$clone_a" rev-parse HEAD)"
+
+  local rc=0 out
+  out="$(cd "$clone_a" && "$GSP" --auto-resolve </dev/null 2>&1)" || rc=$?
+  if [[ $rc -eq 0 ]] && git -C "$clone_a" log -1 --format=%B | grep -q 'Gsp-Auto-Resolved:'; then
+    s_ok "A auto-resolved and pushed the merge"
+  else
+    s_bad "A did not auto-resolve/push (rc=$rc)"; s_diag "$(head -5 <<< "$out")"; return
+  fi
+
+  # B pulls: must be a plain fast-forward, no resolution, no new commit
+  rc=0
+  out="$(cd "$clone_b" && "$GSP" </dev/null 2>&1)" || rc=$?
+  if [[ $rc -eq 0 && "$(git -C "$clone_b" rev-parse HEAD)" == "$(git -C "$bare" rev-parse main)" ]]; then
+    s_ok "B synced to origin with exit 0"
+  else
+    s_bad "B failed to sync (rc=$rc)"; s_diag "$(head -5 <<< "$out")"
+  fi
+  if grep -q 'Fast-forwarding' <<< "$out" && ! grep -qi 'auto-resolv' <<< "$out"; then
+    s_ok "B fast-forwarded onto the pushed merge without re-resolving"
+  else
+    s_bad "B did not take the plain fast-forward path"; s_diag "$(head -8 <<< "$out")"
+  fi
+
+  # A re-runs: nothing to do, no new commit
+  local before; before="$(git -C "$clone_a" rev-parse HEAD)"
+  rc=0
+  out="$(cd "$clone_a" && "$GSP" </dev/null 2>&1)" || rc=$?
+  if [[ $rc -eq 0 && "$(git -C "$clone_a" rev-parse HEAD)" == "$before" ]] && grep -q 'Already up to date' <<< "$out"; then
+    s_ok "A re-run is a no-op (already up to date)"
+  else
+    s_bad "A re-run changed something (rc=$rc)"; s_diag "$(head -5 <<< "$out")"
+  fi
+
+  # Both make unrelated edits after the merge; B pushes first, A syncs.
+  # The old version conflict must not resurface: clean rebase, no new merge.
+  echo "b-note" > "$clone_b/b.txt"; git -C "$clone_b" add b.txt; git -C "$clone_b" commit -q -m "B unrelated"
+  git -C "$clone_b" push -q origin main
+  echo "a-note" > "$clone_a/a.txt"; git -C "$clone_a" add a.txt; git -C "$clone_a" commit -q -m "A unrelated"
+  local a2; a2="$(git -C "$clone_a" rev-parse HEAD)"; local b2; b2="$(git -C "$clone_b" rev-parse HEAD)"
+  rc=0
+  out="$(cd "$clone_a" && "$GSP" </dev/null 2>&1)" || rc=$?
+  if [[ $rc -eq 0 ]] && grep -q 'Rebasing' <<< "$out" && ! grep -qi 'auto-resolv' <<< "$out"; then
+    s_ok "later unrelated edits rebased cleanly with no re-resolution"
+  else
+    s_bad "later sync did not take the clean rebase path (rc=$rc)"; s_diag "$(head -8 <<< "$out")"
+  fi
+
+  local merges
+  merges="$(git -C "$bare" rev-list --merges --count main)"
+  if [[ "$merges" == "1" ]]; then
+    s_ok "origin history has exactly one merge commit"
+  else
+    s_bad "origin history has $merges merge commits (expected 1)"
+  fi
+  if grep -q 'EnvoyVersionCode = 117' "$clone_a/version.go"; then
+    s_ok "resolved version code (117) is stable after further syncs"
+  else
+    s_bad "version code changed after further syncs: $(grep EnvoyVersionCode "$clone_a/version.go")"
+  fi
+
+  # a2 was rebased (new SHA by design); its change must be upstream as an equivalent patch
+  if [[ "$(git -C "$clone_a" cherry "$(git -C "$bare" rev-parse main)" "$a2" | cut -c1)" == "-" ]] && [[ -f "$clone_a/a.txt" ]]; then
+    s_ok "rebased local commit is present upstream as an equivalent patch"
+  else
+    s_bad "rebased local commit's change is missing upstream"
+  fi
+  assert_zero_loss "$clone_a" "$bare" "$a_commit" "$b_commit" "$b2"
+}
+
+# ==============================================================================
+# Scenario 15: hardening from the zero-loss review. Detached HEAD is refused;
+# a failing `git stash push` stops before any reset (edits intact); a lock dir
+# with no pid file (gsp killed mid-acquire) is reclaimed once stale.
+# ==============================================================================
+scenario_15() {
+  local dir="$1"
+  setup_test_repo "$dir"
+  local bare="$dir/bare.git"
+  local clone_a="$dir/clone_a"
+  local clone_b="$dir/clone_b"
+
+  echo "b" > "$clone_b/b.txt"; git -C "$clone_b" add b.txt; git -C "$clone_b" commit -q -m "B change"
+  git -C "$clone_b" push -q origin main
+  local b_commit; b_commit="$(git -C "$clone_b" rev-parse HEAD)"
+  echo "a" > "$clone_a/a.txt"; git -C "$clone_a" add a.txt; git -C "$clone_a" commit -q -m "A change"
+  local a_commit; a_commit="$(git -C "$clone_a" rev-parse HEAD)"
+  local pre; pre="$a_commit"
+  local rc out
+
+  # (1) detached HEAD
+  git -C "$clone_a" checkout -q --detach
+  rc=0; out="$(cd "$clone_a" && "$GSP" </dev/null 2>&1)" || rc=$?
+  if [[ $rc -eq 1 ]] && grep -q 'detached HEAD' <<< "$out" && [[ "$(git -C "$clone_a" rev-parse HEAD)" == "$pre" ]]; then
+    s_ok "detached HEAD refused with exit 1, HEAD unchanged"
+  else
+    s_bad "detached HEAD not refused cleanly (rc=$rc)"; s_diag "$(head -3 <<< "$out")"
+  fi
+  [[ -d "$clone_a/.git/gsp.lock" ]] && s_bad "lock left behind after detached-HEAD refusal" || s_ok "lock released after detached-HEAD refusal"
+  git -C "$clone_a" checkout -q main
+
+  # (2) git stash push fails (unreadable untracked dir) → stop, nothing reset
+  echo "local edit" > "$clone_a/init.txt"
+  mkdir "$clone_a/locked"; echo "secret" > "$clone_a/locked/f"; chmod 000 "$clone_a/locked"
+  rc=0; out="$(cd "$clone_a" && "$GSP" </dev/null 2>&1)" || rc=$?
+  chmod 755 "$clone_a/locked"
+  if [[ $rc -eq 1 ]] && grep -q 'Could not stash' <<< "$out"; then
+    s_ok "failed stash stops gsp with exit 1 before any mutation"
+  elif [[ $rc -eq 0 ]]; then
+    s_skp "failed stash path" "git could stash an unreadable dir on this platform"
+  else
+    s_bad "failed stash: unexpected rc=$rc"; s_diag "$(head -5 <<< "$out")"
+  fi
+  if [[ "$(cat "$clone_a/init.txt")" == "local edit" && "$(cat "$clone_a/locked/f")" == "secret" ]]; then
+    s_ok "tracked edit and unreadable untracked file survive a failed stash"
+  else
+    s_bad "edits lost after failed stash"; s_diag "status: $(git -C "$clone_a" status --porcelain | tr '\n' ';')"
+  fi
+  rm -rf "$clone_a/locked"
+  git -C "$clone_a" reset -q --hard "$pre" 2>/dev/null   # test-only: back to a known state
+
+  # (3) lock dir without pid file, older than a minute → reclaimed
+  echo "local edit" > "$clone_a/init.txt"; echo "untracked" > "$clone_a/u.txt"
+  mkdir "$clone_a/.git/gsp.lock"; touch -t 202001010000 "$clone_a/.git/gsp.lock"
+  rc=0; out="$(cd "$clone_a" && "$GSP" </dev/null 2>&1)" || rc=$?
+  if [[ $rc -eq 0 ]] && grep -q 'stale lock' <<< "$out" && git -C "$clone_a" merge-base --is-ancestor "$b_commit" HEAD; then
+    s_ok "pid-less stale lock reclaimed and pull completed"
+  else
+    s_bad "pid-less lock not reclaimed (rc=$rc)"; s_diag "$(head -5 <<< "$out")"
+  fi
+  assert_uncommitted_preserved "$clone_a" init.txt "local edit" u.txt "untracked"
+  # a_commit was rebased (new SHA by design); its change must be upstream as an equivalent patch
+  if [[ "$(git -C "$clone_a" cherry "$(git -C "$bare" rev-parse main)" "$a_commit" | cut -c1)" == "-" ]]; then
+    s_ok "rebased local commit is present upstream as an equivalent patch"
+  else
+    s_bad "rebased local commit's change is missing upstream"
+  fi
+  assert_zero_loss "$clone_a" "$bare" "$b_commit"
+}
+
+# ==============================================================================
+# Runner and timeout guard
+# ==============================================================================
+run_scenario() {
+  local num="$1"
+  local name="$2"
+  local log="$tmp/scen_${num}.log"
+  local scen_tmp="$tmp/scen_${num}_tmp"
+  mkdir -p "$scen_tmp"
+
+  (
+    "scenario_${num}" "$scen_tmp"
+  ) > "$log" 2>&1 &
+  local pid=$!
+
+  # 60-second watchdog
+  (
+    sleep 60
+    if kill -0 "$pid" 2>/dev/null; then
+      kill -TERM "$pid" 2>/dev/null
+      sleep 1
+      kill -KILL "$pid" 2>/dev/null
+    fi
+  ) &
+  local watchdog=$!
+
+  wait "$pid" 2>/dev/null
+  local rc=$?
+  kill "$watchdog" 2>/dev/null 2>&1 || true
+  wait "$watchdog" 2>/dev/null 2>&1 || true
+
+  if [[ $rc -eq 143 || $rc -eq 137 ]]; then
+    bad "scenario $num ($name) timed out after 60s"
+    return
+  fi
+
+  local checks_found=0
+  while IFS= read -r line; do
+    case "$line" in
+      OK:*)
+        ok "scenario $num: ${line#OK: }"
+        checks_found=$((checks_found + 1))
+        ;;
+      BAD:*)
+        bad "scenario $num: ${line#BAD: }"
+        checks_found=$((checks_found + 1))
+        ;;
+      SKP:*)
+        local payload="${line#SKP: }"
+        local desc="${payload%% | *}"
+        local reason="${payload#* | }"
+        skp "scenario $num: $desc" "$reason"
+        checks_found=$((checks_found + 1))
+        ;;
+      DIAG:*)
+        printf '      %s\n' "${line#DIAG: }"
+        ;;
+    esac
+  done < "$log"
+
+  if [[ $checks_found -eq 0 ]]; then
+    bad "scenario $num ($name) crashed or failed to emit checks (rc=$rc)"
+    sed 's/^/      /' "$log" | head -20
+  fi
+}
+
+echo "script/test-gsp: scenario harness for gsp auto-resolution"
+
+# Determine which scenarios to run
+scenarios_to_run=()
+for arg in "$@"; do
+  if [[ "$arg" =~ ^[0-9]+$ ]]; then
+    scenarios_to_run+=("$arg")
+  fi
+done
+
+if [[ ${#scenarios_to_run[@]} -eq 0 ]]; then
+  scenarios_to_run=(1 2 3 4 5 6 7 8 9 10 11 12 13 14 15)
+fi
+
+scenario_name() {
+  case "$1" in
+    1) echo "Envoy counter max & max_unique" ;;
+    2) echo "Envoy code conflict abort" ;;
+    3) echo "Gandalf semver_split adjacent lines" ;;
+    4) echo "Obsidian timestamp & body merge" ;;
+    5) echo "Obsidian body conflict abort" ;;
+    6) echo "Non-TTY consent & --auto-resolve" ;;
+    7) echo "Verify failure rollback & failed ref" ;;
+    8) echo "SIGINT injection before ff" ;;
+    9) echo "Push race & retry" ;;
+    10) echo "Locked credentials probe exit 4" ;;
+    11) echo "Push failure exit 3 & fresh retry" ;;
+    12) echo "--no-push local merge" ;;
+    13) echo "Timing warm verify cache" ;;
+    14) echo "No re-resolution loop after pushed merge" ;;
+    15) echo "Hardening: detached HEAD, failed stash, stale lock" ;;
+    *) echo "Unknown scenario" ;;
+  esac
+}
+
+for s in "${scenarios_to_run[@]}"; do
+  run_scenario "$s" "$(scenario_name "$s")"
+done
+
+echo
+if [[ $fail -eq 0 ]]; then
+  echo "PASS: $pass checks passed, $skip skipped"
+  exit 0
+else
+  echo "FAIL: $fail failed, $pass passed, $skip skipped"
+  exit 1
+fi

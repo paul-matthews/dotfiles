@@ -1,0 +1,14 @@
+version = 1
+[[rule]]
+name = "build"
+files = ["version.properties"]
+line = '^version\.build=(?P<value>\d+)$'
+type = "counter"
+
+[[group]]
+name = "semver"
+files = ["version.properties"]
+type = "semver_split"
+major = '^version\.major=(?P<value>\d+)$'
+minor = '^version\.minor=(?P<value>\d+)$'
+patch = '^version\.patch=(?P<value>\d+)$'

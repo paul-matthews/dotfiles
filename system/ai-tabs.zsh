@@ -1,6 +1,7 @@
 # AI-tool tabs: wrap a CLI so its tab takes the project's colour, darkened,
-# with a "🤖" title and a badge naming the tool, then restores the project tab
-# when the tool exits. The wrapper never parses arguments; "$@" passes through.
+# with a "🤖" title while preserving the project and role badge, then restores
+# the project tab when the tool exits. The wrapper never parses arguments;
+# "$@" passes through.
 #
 # Shared: claude, agy. Work machines add jc and jetski in system/ai-tabs.work.zsh.
 # Add another tool by appending name:BADGE to _AI_TAB_CMDS.
@@ -19,7 +20,7 @@ _ai_tab_wrap() {
   [[ -n "${TERMINAL_ROLE:-}" ]] && label="$label / $TERMINAL_ROLE"
   set_tab_color ${=rgb}
   set_tab_title "🤖 $label"
-  set_badge "$badge"
+  set_badge "$label"
 
   command "$name" "$@"
   local rc=$?
@@ -31,7 +32,9 @@ _ai_tab_wrap() {
 
 # Commands to wrap, as name:BADGE. Work machines append to this in ai-tabs.work.zsh.
 # _ai_tabs_finalize (called at the end of zshrc) defines a wrapper function for
-# each name, converting an alias of that name if ~/.localrc defined one.
+# each name that is installed here, converting an alias of that name if
+# ~/.localrc or ~/.localrc.secrets defined one. A name that is neither is left
+# undefined.
 #   claude  Claude Code
 #   agy     Antigravity CLI (the public one, installed to ~/.local/bin)
 typeset -gaU _AI_TAB_CMDS
@@ -61,7 +64,7 @@ _ai_tab_wrap_expansion() {
   [[ -n "${TERMINAL_ROLE:-}" ]] && label="$label / $TERMINAL_ROLE"
   set_tab_color ${=rgb}
   set_tab_title "🤖 $label"
-  set_badge "$badge"
+  set_badge "$label"
 
   eval "$expansion" '"$@"'
   local rc=$?
@@ -88,9 +91,12 @@ _ai_tabs_finalize() {
       expansion="${aliases[$name]}"
       unalias "$name"
       eval "$name() { _ai_tab_run ${(q)expansion} ${(q)badge} \"\$@\"; }"
-    elif ! (( ${+functions[$name]} )); then
+    elif ! (( ${+functions[$name]} )) && (( ${+commands[$name]} )); then
       eval "$name() { _ai_tab_wrap ${(q)name} ${(q)badge} \"\$@\"; }"
     fi
+    # A registered name that is neither an alias nor on PATH gets no wrapper,
+    # so `whence -w` tells the truth about a tool that is not installed here.
+    # A tool installed mid-session is wrapped at the next shell.
   done
 }
 

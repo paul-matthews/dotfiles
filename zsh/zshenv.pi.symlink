@@ -1,0 +1,9 @@
+# ~/.zshenv on Raspberry Pis (script/bootstrap links zshenv.pi.symlink).
+#
+# Every zsh reads this first, including the non-interactive `zsh -c` that
+# `ssh host cmd` runs, which reads nothing else. So it holds PATH only:
+# fast, silent, no commands run. No Homebrew on a Pi.
+
+export ZSH=$HOME/.dotfiles
+typeset -U path
+path=($HOME/.local/bin(N-/) $ZSH/bin(N-/) $path)

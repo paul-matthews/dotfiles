@@ -21,6 +21,10 @@
 #   Tags are stripped before a file is classified, so path.work.zsh still
 #   loads first and completion.work.zsh still loads last.
 #
+#   Inside a file (or ~/.localrc.secrets, ~/.localrc), scope single lines with
+#   dotfiles_has_tag, defined in zshrc before this loader runs:
+#     if dotfiles_has_tag work; then ...; fi
+#
 # Safe mode
 #   DOTFILES_SAFE=1 zsh   skips every topic file, for repairing a broken setup.
 

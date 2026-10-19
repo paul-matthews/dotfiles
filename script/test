@@ -37,7 +37,7 @@ print -r -- "PROJECTS=$PROJECTS"
 print -r -- "PATH=$PATH"
 print -r -- "DOTFILES_PROFILE=$DOTFILES_PROFILE"
 print -r -- "DOTFILES_TAGS=$DOTFILES_TAGS"
-for f in tabcolor gwa cpush role reload! gsp gandalf_prompt_precmd claude agy _tabcolor_preset_for; do
+for f in tabcolor gwa cpush role reload! gsp gandalf_prompt_precmd _git_configure_work_hosts claude agy _tabcolor_preset_for; do
   print -r -- "WHENCE:$f=$(whence -w $f 2>/dev/null)"
 done
 print -r -- "PRESET_COSMIC=$(TABCOLOR_PRESET= _tabcolor_preset_for $HOME/src/pico/cosmic-clock 2>/dev/null)"
@@ -48,6 +48,11 @@ alias _probe_tool="echo probe-tool-ran"; _AI_TAB_CMDS+=(_probe_tool:PROBE); _ai_
 print -r -- "WRAPPED_ALIAS=$(whence -w _probe_tool | awk "{print \$NF}")"
 print -r -- "WRAPPED_RUN=$(_probe_tool arg1 2>/dev/null | LC_ALL=C tr -d "\000-\037" | grep -o "probe-tool-ran arg1")"
 print -r -- "AI_CMDS=${(j: :)_AI_TAB_CMDS}"
+_AI_TAB_CMDS+=(_probe_absent:ABSENT); _ai_tabs_finalize
+print -r -- "WRAPPED_ABSENT=$(whence -w _probe_absent 2>/dev/null | awk "{print \$NF}")"
+for e in $_AI_TAB_CMDS; do n=${e%%:*}; print -r -- "AI_TOOL:$n=$(whence -w $n 2>/dev/null | awk "{print \$NF}"):${+commands[$n]}"; done
+print -r -- "HAS_TAG_YES=$(dotfiles_has_tag $DOTFILES_PROFILE && echo y)"
+print -r -- "HAS_TAG_NO=$(dotfiles_has_tag no-such-tag || echo n)"
 print -r -- "LOAD_ORDER=$(_dotfiles_sorted x/ai.work.zsh x/ai.zsh x/ai.work.linux.zsh | tr "\n" " ")"
 print -r -- "PROBE_DONE"
 '
@@ -150,14 +155,18 @@ fi
 if [[ "$expected_profile" == "home" ]]; then
   v="$(whence_kind main gandalf_prompt_precmd)"
   [[ -z "$v" ]] && ok "work-only gandalf hook is not loaded on a home profile" || bad "gandalf hook loaded on a home profile"
+  v="$(whence_kind main _git_configure_work_hosts)"
+  [[ -z "$v" ]] && ok "work-only git config helper is not loaded on a home profile" || bad "work git config helper loaded on a home profile"
 else
   skp "gandalf hook absent" "work profile"
+  v="$(whence_kind main _git_configure_work_hosts)"
+  [[ "$v" == "function" ]] && ok "_git_configure_work_hosts is a function on a work profile" || bad "_git_configure_work_hosts is '${v:-missing}', expected function"
 fi
 
 #------------------------------------------------------------------------------
 # 4. Topic functions and aliases that must exist
 #------------------------------------------------------------------------------
-for spec in tabcolor:function gwa:function cpush:function role:function claude:function agy:function reload!:alias gsp:alias; do
+for spec in tabcolor:function gwa:function cpush:function role:function reload!:alias gsp:alias; do
   name="${spec%%:*}"; kind="${spec##*:}"
   actual="$(whence_kind main "$name")"
   [[ "$actual" == "$kind" ]] && ok "$name is a $kind" || bad "$name is '${actual:-missing}', expected $kind"
@@ -177,6 +186,21 @@ v="$(get main AI_CMDS)"; [[ "$v" == *claude:CLAUDE* && "$v" == *agy:ANTIGRAVITY*
 v="$(get main LOAD_ORDER)"; [[ "$v" == "x/ai.zsh x/ai.work.zsh x/ai.work.linux.zsh " ]] && ok "an untagged topic file loads before its tagged variants" || bad "load order is '$v'"
 v="$(get main WRAPPED_ALIAS)"; [[ "$v" == function ]] && ok "an aliased AI tool becomes a wrapped function after ~/.localrc" || bad "wrapped alias is '$v', expected function"
 v="$(get main WRAPPED_RUN)"; [[ "$v" == "probe-tool-ran arg1" ]] && ok "the wrapped alias runs its expansion with arguments" || bad "wrapped alias run gave '$v'"
+v="$(get main WRAPPED_ABSENT)"; [[ "$v" == none ]] && ok "a registered AI tool that is not installed gets no wrapper" || bad "absent tool wrapper is '$v', expected none"
+# Every registered tool: a function when installed (or when an alias was
+# converted); otherwise undefined. Never a bare command or a lie.
+bad_tools=""
+while IFS= read -r line; do
+  n="${line#AI_TOOL:}"; n="${n%%=*}"; rest="${line#*=}"; kind="${rest%%:*}"; present="${rest##*:}"
+  case "$n" in _probe_tool|_probe_absent) continue ;; esac
+  if [[ "$present" == 1 && "$kind" != function ]] || [[ "$kind" != function && "$kind" != none ]]; then
+    bad_tools="$bad_tools $n($kind,installed=$present)"
+  fi
+done < <(grep '^AI_TOOL:' "$tmp/main.out")
+[[ -z "$bad_tools" ]] && ok "every registered AI tool is wrapped when installed and undefined when not" || bad "AI tools out of step:$bad_tools"
+v="$(get main HAS_TAG_YES)"; w="$(get main HAS_TAG_NO)"
+[[ "$v" == y && "$w" == n ]] && ok "dotfiles_has_tag matches the profile and rejects an unknown tag" || bad "dotfiles_has_tag gave yes='$v' no='$w'"
+v="$(get safe HAS_TAG_YES)"; [[ "$v" == y ]] && ok "dotfiles_has_tag works under DOTFILES_SAFE=1" || bad "dotfiles_has_tag under DOTFILES_SAFE=1 gave '$v'"
 
 #------------------------------------------------------------------------------
 # 5b. Tab colour engine: path map first, .envrc override, nothing elsewhere
@@ -228,12 +252,105 @@ for f in "${absent[@]}"; do
   [[ -e "$DOTFILES_ROOT/$f" ]] && bad "$f should have been removed" || ok "$f is gone"
 done
 
+# gsp merge resolver: strategies + fixtures (fast; the full scenario harness is
+# script/test-gsp and is deliberately not run here, to keep gsp's verify quick)
+if out="$("$DOTFILES_ROOT/bin/git-meta-resolve" self-test 2>&1)"; then
+  ok "git-meta-resolve self-test ($(tail -1 <<<"$out"))"
+else
+  bad "git-meta-resolve self-test failed:"; sed 's/^/      /' <<<"$out" | head -20
+fi
+"$DOTFILES_ROOT/bin/git-meta-resolve" check-config "$DOTFILES_ROOT/git/gsp-merge.toml.example" >/dev/null 2>&1 \
+  && ok "gsp-merge.toml.example template is a valid config" || bad "gsp-merge.toml.example does not validate"
+syntax_bad=0
+for f in bin/git-safe-pull bin/gsp-verify script/test-gsp; do
+  bash -n "$DOTFILES_ROOT/$f" 2>"$tmp/syn" || { syntax_bad=1; printf '      %s: %s\n' "$f" "$(head -1 "$tmp/syn")"; }
+done
+[[ $syntax_bad -eq 0 ]] && ok "gsp bash scripts parse" || bad "gsp bash syntax errors above"
+
+# Work git config helper: overrides user.email on matching work remotes (https,
+# sso, ssh, and both single- and multi-segment git@host:... paths) while leaving
+# GitHub remotes on the personal email from ~/.gitconfig.local.
+(
+  gwhome="$tmp/gitwork"
+  mkdir -p "$gwhome"
+  ln -s "$DOTFILES_ROOT/git/gitconfig.symlink" "$gwhome/.gitconfig"
+  printf '[user]\n\tname = Test\n\temail = personal@example.com\n' > "$gwhome/.gitconfig.local"
+  HOME="$gwhome" zsh -c 'source "$1/git/config.work.zsh" && _git_configure_work_hosts "corp@work.example" "work.example" "corp.work.example"' _ "$DOTFILES_ROOT"
+  for spec in \
+    "https://work.example/org/repo.git:corp@work.example" \
+    "sso://work.example/org/repo:corp@work.example" \
+    "ssh://git@work.example/org/repo.git:corp@work.example" \
+    "git@work.example:repo.git:corp@work.example" \
+    "git@work.example:org/repo.git:corp@work.example" \
+    "https://corp.work.example/org/repo.git:corp@work.example" \
+    "git@github.com:user/repo.git:personal@example.com"; do
+    url="${spec%:*}"; want="${spec##*:}"
+    rm -rf "$gwhome/repo" && git init -q "$gwhome/repo"
+    git -C "$gwhome/repo" remote add origin "$url"
+    got="$(HOME="$gwhome" GIT_CONFIG_GLOBAL="$gwhome/.gitconfig" git -C "$gwhome/repo" config user.email)"
+    [[ "$got" == "$want" ]] || exit 1
+  done
+) && ok "_git_configure_work_hosts overrides user.email only for matching work remotes" \
+  || bad "_git_configure_work_hosts failed remote URL matching check"
+
+if [[ "$expected_profile" == "work" && -f "$HOME/.gitconfig.work.user" ]]; then
+  work_email="$(git config -f "$HOME/.gitconfig.work.user" user.email 2>/dev/null)"
+  dotfiles_email="$(git -C "$DOTFILES_ROOT" config user.email 2>/dev/null)"
+  if [[ -n "$work_email" && "$dotfiles_email" != "$work_email" ]]; then
+    ok "dotfiles repo keeps personal git email ($dotfiles_email) on a work machine"
+  else
+    bad "dotfiles repo resolved to work git email '$dotfiles_email'"
+  fi
+fi
+
+# Link files follow the loader's tag rule (script/links.sh): right variant per
+# machine, dotted names that aren't tags untouched, two claimants refused.
+(
+  . "$DOTFILES_ROOT/script/links.sh"
+  r="$tmp/links"; mkdir -p "$r/zsh" "$r/git"
+  touch "$r/zsh/zshrc.symlink" "$r/git/gitconfig.local.symlink" \
+        "$r/zsh/zshenv.darwin.symlink" "$r/zsh/zshenv.work.linux.symlink" "$r/zsh/zshenv.pi.symlink"
+  plan() { link_plan "$r" symlink "H/." "$1" | awk -F'\t' '{sub(".*/", "", $1); printf "%s>%s ", $1, $2}'; }
+  [[ "$(plan 'home darwin')" == "gitconfig.local.symlink>H/.gitconfig.local zshenv.darwin.symlink>H/.zshenv zshrc.symlink>H/.zshrc " ]] || exit 1
+  [[ "$(plan 'work darwin')" == *"zshenv.darwin.symlink>H/.zshenv"* ]] || exit 1
+  [[ "$(plan 'work linux')" == *"zshenv.work.linux.symlink>H/.zshenv"* ]] || exit 1
+  [[ "$(plan 'home linux pi')" == *"zshenv.pi.symlink>H/.zshenv"* ]] || exit 1
+  [[ "$(plan 'home linux')" != *zshenv* ]] || exit 1
+  touch "$r/zsh/zshenv.linux.symlink"
+  ! link_plan "$r" symlink "H/." "home linux pi" >/dev/null
+) && ok "tagged link files: right variant per machine, plain dotted names kept, clashes refused" \
+  || bad "tagged link files: script/links.sh picked the wrong variants or allowed a clash"
+
+# ~/.zshenv gives non-interactive shells (ssh host cmd) the basics on PATH
+if [[ -e "$HOME/.zshenv" ]]; then
+  ni_path="$(env -i HOME="$HOME" PATH=/usr/bin:/bin /bin/zsh -c 'print -r -- $PATH' 2>/dev/null)"
+  missing=()
+  [[ -d "$HOME/.local/bin" && ":$ni_path:" != *":$HOME/.local/bin:"* ]] && missing+=("~/.local/bin")
+  [[ "$(uname -s)" == Darwin && -d /opt/homebrew/bin && ":$ni_path:" != *":/opt/homebrew/bin:"* ]] && missing+=("/opt/homebrew/bin")
+  if [[ ${#missing[@]} -eq 0 ]]; then
+    ok "non-interactive zsh (ssh host cmd) has ~/.local/bin$([[ "$(uname -s)" == Darwin ]] && echo ' and Homebrew') on PATH"
+  else
+    bad "non-interactive zsh is missing ${missing[*]} on PATH (check ~/.zshenv)"
+  fi
+else
+  skp "non-interactive zsh PATH" "no ~/.zshenv on this machine (run script/bootstrap if a variant exists for it)"
+fi
+
 #------------------------------------------------------------------------------
 # 7. Bootstrap is idempotent on a configured machine
 #------------------------------------------------------------------------------
 if out="$("$DOTFILES_ROOT/script/bootstrap" --dry-run 2>&1)"; then
   # a pending secrets decrypt is state, not configuration; see the secrets check
   out="$(grep -v 'would: decrypt secrets' <<<"$out")"
+  # A brand-new link (its target doesn't exist yet) is state too: the pull that
+  # adds a link file can't have been bootstrapped yet, and failing here would
+  # make gsp roll that pull back on every machine. Anything else still fails.
+  pending="$(grep -E 'would: (link |create directory )' <<<"$out" || true)"
+  out="$(grep -v -E 'would: (link |create directory )' <<<"$out" || true)"
+  if [[ -n "$pending" ]]; then
+    skp "bootstrap: $(grep -c 'would: link ' <<<"$pending") new link(s) pending" "run script/bootstrap"
+    sed 's/^/      /' <<<"$pending"
+  fi
   if grep -q 'would:' <<<"$out"; then
     bad "bootstrap --dry-run still has something to do:"
     grep 'would:' <<<"$out" | sed 's/^/      /'
@@ -261,6 +378,16 @@ fi
     && printf 'AGE-SECRET-KEY-1%s\n' "$(printf 'Q%.0s' $(seq 1 40))" > leak.txt && git add leak.txt \
     && git -c user.email=t@t -c user.name=t -c commit.gpgsign=false commit -q -m leak >/dev/null 2>&1
 ) && bad "pre-commit hook let a private key through" || ok "pre-commit hook blocks a commit containing a private key"
+
+# A value assigned on an indented line of the secrets file (inside an
+# `if dotfiles_has_tag ...` block) must be on the blocklist too.
+printf 'if dotfiles_has_tag work; then\n  alias probe_x=%s\nfi\n' "'probe-secret-value-123456'" > "$tmp/probe.secrets"
+(
+  cd "$tmp" && git init -q hooktest2 && cd hooktest2 \
+    && ln -s "$DOTFILES_ROOT/script/pre-commit" .git/hooks/pre-commit \
+    && printf 'x = "probe-secret-value-123456"\n' > leak.txt && git add leak.txt \
+    && SECRETS_DEC="$tmp/probe.secrets" git -c user.email=t@t -c user.name=t -c commit.gpgsign=false commit -q -m leak >/dev/null 2>&1
+) && bad "pre-commit hook let an indented secrets value through" || ok "pre-commit hook blocks a value from an indented line of the secrets file"
 
 #------------------------------------------------------------------------------
 # 8b. Packages (informational only: a new Brewfile entry must not fail gsp on

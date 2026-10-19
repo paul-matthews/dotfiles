@@ -1,0 +1,3 @@
+const (
+	EnvoyVersionCode = 117 // ours
+)

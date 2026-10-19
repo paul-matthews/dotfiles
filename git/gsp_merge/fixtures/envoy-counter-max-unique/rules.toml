@@ -1,0 +1,13 @@
+version = 1
+[[rule]]
+name = "envoy-version-code"
+files = ["**/version.go"]
+line = '^\s*EnvoyVersionCode\s*=\s*(?P<value>\d+)\s*$'
+type = "counter"
+strategy = "max_unique"
+
+[[rule]]
+name = "envoy-version"
+files = ["**/version.go"]
+line = '^\s*EnvoyVersion\s*=\s*"(?P<value>[^"]+)"\s*$'
+type = "semver"

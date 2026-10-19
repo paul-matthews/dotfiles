@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+set -eo pipefail
+force=0; changed_from=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in --force) force=1; shift ;; --changed-from) [[ $# -ge 2 ]] && changed_from="$2" && shift 2 || shift ;; *) shift ;; esac
+done
+if [[ -d .git && -x script/test ]]; then
+  toplevel="."; git_dir=".git"
+else
+  toplevel="$(git rev-parse --show-toplevel 2>/dev/null)" || exit 0
+  [[ -n "$toplevel" && -x "$toplevel/script/test" ]] || exit 0
+  cd "$toplevel"; git_dir="${GIT_DIR:-.git}"; [[ -d "$git_dir" ]] || git_dir="$(git rev-parse --absolute-git-dir)"
+fi
+[[ "${GSP_NO_VERIFY:-}" != "1" ]] || { echo -e "\033[33m⚠️  GSP_NO_VERIFY=1: skipping script/test.\033[0m" >&2; exit 0; }
+if [[ -n "$changed_from" ]]; then
+  mr="$(dirname "$(realpath "$0")")/git-meta-resolve"; cfg=""
+  [[ -x "$mr" ]] && cfg="$("$mr" config --json 2>/dev/null || true)"
+  if [[ -n "$cfg" ]] && git -c core.quotepath=false diff --name-only -z "$changed_from" 2>/dev/null | python3 -c 'import sys,json,pathlib
+try:
+  c=json.loads(sys.argv[1]).get("verify_skip",[]); p=[x for x in sys.stdin.buffer.read().decode("utf-8","surrogateescape").split("\0") if x]
+  sys.exit(0 if c and p and all(any(pathlib.PurePosixPath(f).full_match(g) for g in c) for f in p) else 1)
+except Exception: sys.exit(1)' "$cfg" 2>/dev/null; then
+    echo -e "\033[33m⏭️  script/test skipped: only verify_skip paths changed.\033[0m"; exit 0
+  fi
+fi
+tmp="$git_dir/gsp-verify-idx.$$.$RANDOM"; trap 'rm -f "$tmp"' EXIT
+[[ -f "$git_dir/index" ]] && { cp -c "$git_dir/index" "$tmp" 2>/dev/null || cp "$git_dir/index" "$tmp"; }
+GIT_INDEX_FILE="$tmp" git --no-optional-locks add -A; tree="$(GIT_INDEX_FILE="$tmp" git write-tree)"; rm -f "$tmp" & trap - EXIT
+if command -v sha256sum >/dev/null 2>&1; then
+  key="$(printf "tree=%s\nhost=%s\nprofile=%s\n" "$tree" "${HOSTNAME:-$(hostname)}" "${DOTFILES_PROFILE:-}" | sha256sum)"
+else
+  key="$(printf "tree=%s\nhost=%s\nprofile=%s\n" "$tree" "${HOSTNAME:-$(hostname)}" "${DOTFILES_PROFILE:-}" | shasum -a 256)"
+fi
+key="${key%% *}"; cache_file="$git_dir/gsp/verified"; ttl="${GSP_VERIFY_TTL:-43200}"
+printf -v now '%(%s)T' -1 2>/dev/null || true; [[ "$now" =~ ^[0-9]+$ ]] || now="$(date +%s)"
+if [[ $force -eq 0 && -f "$cache_file" ]] && (( ttl > 0 )); then
+  while read -r e_key e_epoch || [[ -n "$e_key" ]]; do
+    if [[ "$e_key" == "$key" && "$e_epoch" =~ ^[0-9]+$ ]] && (( now >= e_epoch && now - e_epoch <= ttl )); then
+      echo -e "\033[32m✅ script/test passed (cached).\033[0m"; exit 0
+    fi
+  done < "$cache_file"
+fi
+echo -e "\033[34m🧪 Verifying with script/test...\033[0m"
+if output="$("$toplevel/script/test" 2>&1)"; then
+  echo -e "\033[32m✅ script/test passed.\033[0m"
+  mkdir -p "${cache_file%/*}"
+  { [[ -f "$cache_file" ]] && tail -n 49 "$cache_file" || true; printf "%s %s\n" "$key" "$now"; } > "${cache_file}.tmp" && mv -f "${cache_file}.tmp" "$cache_file"
+  exit 0
+fi
+echo "$output" | grep -E '✗|FAIL|^      ' >&2 || true; exit 1

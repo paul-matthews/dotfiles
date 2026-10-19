@@ -1,0 +1,11 @@
+# ~/.zshenv on Macs (script/bootstrap links zshenv.darwin.symlink here).
+#
+# Every zsh reads this first, including the non-interactive `zsh -c` that
+# `ssh host cmd` runs, which reads nothing else. So it holds PATH only:
+# fast, silent, no commands run. Login and interactive shells set PATH again
+# afterwards (zprofile, system/_path.zsh), so their order is unchanged.
+# Other variants: zshenv.work.linux.symlink, zshenv.pi.symlink.
+
+export ZSH=$HOME/.dotfiles
+typeset -U path
+path=($HOME/.local/bin(N-/) $ZSH/bin(N-/) /opt/homebrew/bin(N-/) /opt/homebrew/sbin(N-/) $path)

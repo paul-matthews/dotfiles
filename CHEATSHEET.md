@@ -4,7 +4,7 @@
 Shell secrets (exports, aliases, real paths) shared by every machine, encrypted in the repo.
 
 - **Pull (decrypt):** `secrets-pull` → `~/.localrc.secrets` (mode 600, sourced by zshrc)
-- **Edit:** `~/.localrc.secrets` in plain text (never committed)
+- **Edit:** `~/.localrc.secrets` in plain text (never committed). One file for all machines: wrap machine-specific lines in `if dotfiles_has_tag work; then … fi` (home, work, darwin, linux, pi) and pick tool paths by existence
 - **Push (encrypt):** `secrets-push` → `secrets.sops.yaml`, then commit. Refused if another machine pushed since your last pull: pull, merge by hand, push again
 - **Status:** `secrets-status` (key, recipients, in sync?)
 
@@ -17,10 +17,21 @@ Shell secrets (exports, aliases, real paths) shared by every machine, encrypted 
 Tab colour, title and badge follow the project: `.envrc` preset first, else the path map in `system/tabcolor-presets.sh`.
 
 - `role device` → tab reads `🪐 COS / device`; `role` clears; `role -s` shows (`rgit`, `rbuild`, `rdevice`, `rclear`)
-- `claude` / `agy` (and `jc` / `jetski` at work) → darkened project colour, 🤖 title, tool badge; restored on exit
+- `claude` / `agy` (and `jc` / `jetski` at work) → darkened project colour, 🤖 title, project/role badge preserved; restored on exit
 - `ssh host` → amber tab while connected, project colour back after
-- `tabcolor <preset>` · `tabcolor danger` · `tabcolor reset` · `tabcolor-preview <preset>`
-- `gsp` → verified pull: fetch, rebase, `script/test`, roll back on failure
+- `gsp` → verified pull & push: auto-resolves declared trivial conflicts, verifies with cache, pushes if ahead
+
+---
+
+## 🔄 Safe Pull (`gsp`)
+Verified atomic pull + push with declarative auto-resolution of trivial merge conflicts.
+
+- **Run:** `gsp` (fetches, rebases or auto-merges, verifies, pushes if ahead). Pushes by default; `--no-push` (`GSP_NO_PUSH=1`) to skip.
+- **Auto-resolve:** resolves conflicts matching `.gsp-merge.toml` (template: `git/gsp-merge.toml.example`). Use `--auto-resolve` (`GSP_AUTO_RESOLVE=1`, or `auto = true` in config) for unattended sync; interactive Y/n prompt otherwise; `--no-resolve` disables. Undeclared conflicts roll back untouched.
+- **Verify cache:** cached `script/test` result (`--verify` forces rerun, `--no-verify` / `GSP_NO_VERIFY=1` skips).
+- **Exit codes:** `0` synced/pushed · `1` aborted/rolled back (untouched) · `2` config/usage error · `3` synced locally, push failed · `4` locked creds without TTY (untouched).
+- **Recovery:** `git reset --hard refs/gsp/backup/<id>/head && git stash apply refs/gsp/backup/<id>/stash`
+- **Config helper:** `git-meta-resolve init` (create `.gsp-merge.toml`), `git-meta-resolve check-config [<path>]`. Test harness: `script/test-gsp` (not run by gsp).
 
 ---
 
