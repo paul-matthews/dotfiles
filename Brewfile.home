@@ -3,10 +3,7 @@ cask_args appdir: '/Applications'
 
 # Media
 brew 'yt-dlp'
-cask 'vlc'
 cask 'quicklook-video'
-cask 'plex'
-cask 'sonos'
 
 # Pico / RPi toolchain (cosmic-clock and friends)
 brew 'cmake'
@@ -22,5 +19,4 @@ cask 'android-platform-tools'
 # Apps
 cask '1password'
 cask 'ghostty'
-cask 'steam'
 cask 'whatsapp'

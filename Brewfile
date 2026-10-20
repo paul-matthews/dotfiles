@@ -13,7 +13,6 @@ brew 'neovim'
 brew 'ripgrep'
 brew 'spark'
 brew 'tmux'
-brew 'vim'
 brew 'wget'
 brew 'zoxide'
 
@@ -38,7 +37,7 @@ brew 'nvm'
 brew 'pyenv'
 brew 'uv'
 
-# Editor
+# Editor (also provides terminal vim; the vim formula conflicts with it)
 brew 'macvim'
 
 # Network & utilities
@@ -52,4 +51,3 @@ cask 'font-meslo-lg-nerd-font'
 # Apps
 cask 'raycast'
 cask 'visual-studio-code'
-cask 'zed'
