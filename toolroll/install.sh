@@ -66,7 +66,7 @@ if ! typeset -f dotfiles_has_tag >/dev/null 2>&1; then
   dotfiles_has_tag() {
     local p=""
     [ -r "$HOME/.dotfiles-profile" ] && p="$(tr -d '[:space:]' < "$HOME/.dotfiles-profile")"
-    [[ "$1" == "\${p:-home}" || "$1" == "\$(uname -s | tr '[:upper:]' '[:lower:]')" ]]
+    [[ "\$1" == "\${p:-home}" || "\$1" == "\$(uname -s | tr '[:upper:]' '[:lower:]')" ]]
   }
 fi
 [[ -f ~/.localrc.secrets ]] && source ~/.localrc.secrets || true
