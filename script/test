@@ -37,7 +37,7 @@ print -r -- "PROJECTS=$PROJECTS"
 print -r -- "PATH=$PATH"
 print -r -- "DOTFILES_PROFILE=$DOTFILES_PROFILE"
 print -r -- "DOTFILES_TAGS=$DOTFILES_TAGS"
-for f in tabcolor gwa cpush role reload! gsp gandalf_prompt_precmd _git_configure_work_hosts claude agy _tabcolor_preset_for; do
+for f in tabcolor gwa cpush role reload! gsp gandalf_prompt_precmd _git_configure_work_hosts claude agy _tabcolor_preset_for wb; do
   print -r -- "WHENCE:$f=$(whence -w $f 2>/dev/null)"
 done
 print -r -- "PRESET_COSMIC=$(TABCOLOR_PRESET= _tabcolor_preset_for $HOME/src/pico/cosmic-clock 2>/dev/null)"
@@ -54,6 +54,26 @@ print -r -- "SSH_B=$(_ssh_host_row host-b.local 2>/dev/null | cut -d"|" -f1)"
 print -r -- "SSH_OTHER=$(_ssh_host_row example.com 2>/dev/null | cut -d"|" -f1)"
 print -r -- "PRESET_NONE=$(TABCOLOR_PRESET= _tabcolor_preset_for /usr/local 2>/dev/null)"
 print -r -- "PRESET_OVERRIDE=$(TABCOLOR_PRESET=herd _tabcolor_preset_for /usr/local 2>/dev/null)"
+if (( $+functions[_tabcolor_resolve] )); then  # not in DOTFILES_SAFE=1
+TABCOLOR_PRESET= _tabcolor_resolve $HOME/src/.worktrees/tool-roll--feat-x/sub; _tabcolor_group_name "$REPLY" "$_TC_WT"
+print -r -- "WT_GROUP=$REPLY"
+_tabcolor_group_name dotfiles; print -r -- "GROUP_DOTFILES=$REPLY"
+print -r -- "TEMPLATE_DOTFILES=${_TC_TEMPLATE[dotfiles]}"
+print -r -- "TEMPLATE_COSMIC=${_TC_TEMPLATE[cosmic]}"
+print -r -- "GROUP_RGB_DOTFILES=${_TC_GROUP_RGB[dotfiles]}"
+_s=(0 0 0); for _e in "${(@s:|:)_TC_PALETTE[dotfiles]}"; do _c=(${=_e}); for _i in 1 2 3; do (( _s[_i] += _c[_i] )); done; done
+print -r -- "PALETTE_AVG_DOTFILES=$(( (_s[1] + 4) / 8 )) $(( (_s[2] + 4) / 8 )) $(( (_s[3] + 4) / 8 ))"
+_TC_ORDER=(probex "${_TC_ORDER[@]}"); _TC_TAG[probex]=work; _TC_GLOBS[probex]="*/probe-x*"; _TC_SHORT[probex]=PRX
+print -r -- "TAGGED_OFF=$(TABCOLOR_PRESET= DOTFILES_TAGS="home darwin" _tabcolor_preset_for /x/probe-x)"
+print -r -- "TAGGED_ON=$(TABCOLOR_PRESET= DOTFILES_TAGS="work darwin" _tabcolor_preset_for /x/probe-x)"
+zmodload zsh/datetime; cd $HOME; _tabcolor_hook >/dev/null; _t0=$EPOCHREALTIME
+repeat 200 _tabcolor_hook >/dev/null
+print -r -- "HOOK_200_MS=$(( int((EPOCHREALTIME - _t0) * 1000) ))"
+_d=$(mktemp -d); mkdir -p $_d/dotfiles/android $_d/a/tool-roll
+PROJECTS=$_d _tabcolor_root android; print -r -- "ROOT_ANDROID=${REPLY#$_d}"
+PROJECTS=$_d _tabcolor_root toolroll; print -r -- "ROOT_TOOLROLL=${REPLY#$_d}"
+rm -rf $_d
+fi
 alias _probe_tool="echo probe-tool-ran"; _AI_TAB_CMDS+=(_probe_tool:PROBE); _ai_tabs_finalize
 print -r -- "WRAPPED_ALIAS=$(whence -w _probe_tool | awk "{print \$NF}")"
 print -r -- "WRAPPED_RUN=$(_probe_tool arg1 2>/dev/null | LC_ALL=C tr -d "\000-\037" | grep -o "probe-tool-ran arg1")"
@@ -230,6 +250,48 @@ fi
 v="$(get main PRESET_DOTFILES)"; [[ "$v" == dotfiles ]] && ok "path map: dotfiles -> dotfiles" || bad "path map gave '$v' for dotfiles, expected dotfiles"
 v="$(get main PRESET_NONE)"; [[ -z "$v" ]] && ok "path map: unknown directory has no preset" || bad "path map gave '$v' for /usr/local"
 v="$(get main PRESET_OVERRIDE)"; [[ "$v" == herd ]] && ok "TABCOLOR_PRESET from .envrc overrides the map" || bad "override gave '$v', expected herd"
+v="$(get main WT_GROUP)"; [[ "$v" == "🧰 Tool Roll · feat-x" ]] && ok "a ~/src/.worktrees checkout matches its project, group named with the worktree" || bad "worktree group is '$v', expected '🧰 Tool Roll · feat-x'"
+v="$(get main GROUP_DOTFILES)"; [[ "$v" == "📂 Dotfiles" ]] && ok "tab group name is '<emoji> <name>'" || bad "group name is '$v'"
+v="$(get main TEMPLATE_DOTFILES)"; [[ "$v" == "ai control" ]] && ok "wb template defaults to ai + control" || bad "dotfiles template is '$v', expected 'ai control'"
+v="$(get main TEMPLATE_COSMIC)"; [[ "$v" == "ai control run" ]] && ok "wb template: cosmic adds a run tab" || bad "cosmic template is '$v'"
+v="$(get main GROUP_RGB_DOTFILES)"; w="$(get main PALETTE_AVG_DOTFILES)"
+[[ -n "$v" && "$v" == "$w" ]] && ok "group colour is the palette average ($v)" || bad "group colour '$v' is not the palette average '$w'"
+v="$(get main TAGGED_OFF)"; w="$(get main TAGGED_ON)"
+[[ -z "$v" && "$w" == probex ]] && ok "a work-tagged project matches only on work machines" || bad "tagged project gave off='$v' on='$w'"
+v="$(get main ROOT_ANDROID)"; w="$(get main ROOT_TOOLROLL)"
+[[ -z "$v" && "$w" == /a/tool-roll ]] && ok "wb project folders: found by glob, never a folder inside another project" || bad "project folder discovery gave android='$v' toolroll='$w'"
+v="$(get main HOOK_200_MS)"
+[[ -n "$v" && "$v" -lt 150 ]] && ok "precmd hook on an unchanged directory does not fork (200 runs in ${v}ms)" || bad "precmd hook is slow: 200 runs took ${v:-?}ms (forking?)"
+
+# Project data: the committed fallback matches the YAML, the generator rejects
+# bad input, and wb's planner passes its own tests (all need uv's cache).
+if command -v uv >/dev/null 2>&1; then
+  if "$DOTFILES_ROOT/bin/projects-gen" --stdout --public-only 2>"$tmp/gen.err" | cmp -s - "$DOTFILES_ROOT/system/projects.gen"; then
+    ok "system/projects.gen matches system/projects.yaml"
+  elif [[ -s "$tmp/gen.err" ]] && grep -qi 'network\|offline\|resolve\|download' "$tmp/gen.err"; then
+    skp "system/projects.gen in sync" "uv could not fetch PyYAML"
+  else
+    bad "system/projects.gen is stale: run bin/projects-gen --committed and commit it"
+  fi
+  printf 'a:\n  short: A\n  emoji: x\n  name: A\n  globs: ["*/a"]\n  palette: ["1 2 3"]\n' > "$tmp/bad.yaml"
+  printf 'a:\n  short: A\n  emoji: x\n  name: A\n  globs: ["*/a"]\n  base: "1 2 3"\nb:\n  short: A\n  emoji: y\n  name: B\n  globs: ["*/b"]\n  base: "1 2 3"\n' > "$tmp/dup.yaml"
+  if ! "$DOTFILES_ROOT/bin/projects-gen" --check --public-only --public "$tmp/bad.yaml" 2>/dev/null \
+     && ! "$DOTFILES_ROOT/bin/projects-gen" --check --public-only --public "$tmp/dup.yaml" 2>/dev/null \
+     && "$DOTFILES_ROOT/bin/projects-gen" --check --public "$DOTFILES_ROOT/system/projects.yaml" --private "$DOTFILES_ROOT/projects.private.yaml.example" 2>/dev/null; then
+    ok "projects-gen rejects a short palette and a duplicate short name, accepts the private example"
+  else
+    bad "projects-gen validation is wrong (bad input accepted or the example refused)"
+  fi
+  if out="$("$DOTFILES_ROOT/iterm/wb.py" _selftest 2>&1)" && [[ "$out" == *"selftest: ok"* ]]; then
+    ok "wb planner self-test"
+  elif [[ "$out" == *selftest:* ]]; then
+    bad "wb planner self-test: $out"
+  else
+    skp "wb planner self-test" "uv could not run it: $(head -1 <<<"$out")"
+  fi
+else
+  skp "project data and wb self-tests" "uv not installed"
+fi
 
 if [[ "$(uname -s)" == Darwin ]]; then
   dp="$HOME/Library/Application Support/iTerm2/DynamicProfiles/dotfiles-default.json"
@@ -238,6 +300,9 @@ if [[ "$(uname -s)" == Darwin ]]; then
   have_guid="$(defaults read com.googlecode.iterm2 "Default Bookmark Guid" 2>/dev/null || true)"
   [[ "$have_guid" == "$want_guid" ]] && ok "iTerm default profile is 'Dotfiles Default'" || bad "iTerm default profile is not 'Dotfiles Default' (run script/bootstrap, restart iTerm)"
   [[ -e "$HOME/Library/Application Support/iTerm2/DynamicProfiles/projects.json" ]] && bad "retired projects.json still in DynamicProfiles" || ok "retired dynamic profiles are gone"
+  v="$(whence_kind main wb)"; [[ "$v" == function ]] && ok "wb is a function on macOS" || bad "wb is '${v:-missing}' on macOS, expected function"
+else
+  v="$(whence_kind main wb)"; [[ -z "$v" ]] && ok "wb is not defined off macOS" || bad "wb is '$v' off macOS"
   if [[ "$expected_profile" == "home" ]]; then
     "$DOTFILES_ROOT/bin/claude-hooks" check && ok "Claude hooks match claude/hooks.json" || bad "Claude hooks differ from claude/hooks.json (run: bin/claude-hooks install)"
     [[ -e "$HOME/.claude/session-tab-color.sh" ]] && bad "old ~/.claude/session-tab-color.sh still exists" || ok "old Claude tab-colour hook script is gone"
@@ -266,7 +331,8 @@ done < <(git -C "$DOTFILES_ROOT" ls-files -- '*.zsh' 'zsh/*.symlink' | grep -v '
 [[ $syntax_bad -eq 0 ]] && ok "every tracked zsh file parses" || bad "zsh syntax errors above"
 
 # Files that must not exist once a phase has removed them (added per phase)
-absent=(zsh/gandalf.zsh system/tabcolor-palettes.sh iterm/DynamicProfiles/projects.json)
+absent=(zsh/gandalf.zsh system/tabcolor-palettes.sh iterm/DynamicProfiles/projects.json
+        system/tabcolor-presets.sh bin/iterm-layout iterm/iterm_layouts.yaml.example)
 for f in "${absent[@]}"; do
   [[ -e "$DOTFILES_ROOT/$f" ]] && bad "$f should have been removed" || ok "$f is gone"
 done
@@ -419,6 +485,15 @@ printf 'if dotfiles_has_tag work; then\n  alias probe_x=%s\nfi\n' "'probe-secret
     && printf 'x = "probe-secret-value-123456"\n' > leak.txt && git add leak.txt \
     && SECRETS_DEC="$tmp/probe.secrets" git -c user.email=t@t -c user.name=t -c commit.gpgsign=false commit -q -m leak >/dev/null 2>&1
 ) && bad "pre-commit hook let an indented secrets value through" || ok "pre-commit hook blocks a value from an indented line of the secrets file"
+
+# A project root from the private projects file is blocked the same way.
+printf 'probe:\n  root: ~/src/probe-private-root  # comment\n' > "$tmp/probe.projects"
+(
+  cd "$tmp" && git init -q hooktest3 && cd hooktest3 \
+    && ln -s "$DOTFILES_ROOT/script/pre-commit" .git/hooks/pre-commit \
+    && printf 'cd ~/src/probe-private-root\n' > leak.txt && git add leak.txt \
+    && PROJECTS_PRIVATE="$tmp/probe.projects" SECRETS_DEC=/nonexistent git -c user.email=t@t -c user.name=t -c commit.gpgsign=false commit -q -m leak >/dev/null 2>&1
+) && bad "pre-commit hook let a private project root through" || ok "pre-commit hook blocks a root from the private projects file"
 
 #------------------------------------------------------------------------------
 # 8b. Packages (informational only: a new Brewfile entry must not fail gsp on

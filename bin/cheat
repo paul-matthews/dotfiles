@@ -95,10 +95,18 @@ ${S}━━━━━━━━━━━━━━━━━━━━━━━━━�
   ${C}tabcolor reset${R}          ${G}back to default${R}
   ${C}tabcolor-preview${R} ${Y}<preset>${R}  ${G}show work vs Claude colors side by side${R}
   
-  ${H}Workspace Layouts${R} ${D}(iTerm2)${R}
+  ${H}Workbench${R} ${D}(iTerm2 tab groups, projects in system/projects.yaml)${R}
   ${S}────────────────────────────────────${R}
-  ${C}iterm-layout new${R} ${Y}<layout>${R}  ${G}split tab horizontally (75/25) + run command${R}
-  ${C}iterm-layout apply${R} ${Y}<layout>${R}${G}apply split layout on current active tab${R}
+  ${C}wb${R} ${Y}<project>${R}            ${G}open AI + control tabs (+ run, per project) in a new group${R}
+  ${C}wb${R} ${Y}<project>${R} ${Y}-w${R}         ${G}same, in a new window${R}
+  ${C}wb${R}                      ${G}same, for the project you are in${R}
+  ${C}wb group${R}                ${G}group this window's tabs by project${R}
+  ${C}wb add${R} ${Y}[project]${R}        ${G}put this tab in its (or the named) project's group${R}
+  ${C}wb move${R} ${Y}[N]${R}             ${G}move this tab's group to a new window (or window N)${R}
+  ${C}wb focus${R} ${Y}[project]${R}      ${G}drill in: expand it, collapse the rest; no arg: drill out${R}
+  ${C}wb ls${R}                   ${G}groups and tabs in every window${R}
+  ${C}wb doctor${R}               ${G}check iTerm 3.7.5+, Python API, project data${R}
+  ${C}projects-gen${R}            ${G}rebuild after editing projects.yaml (shells do it too)${R}
 
 
 

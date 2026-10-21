@@ -275,20 +275,6 @@ setup_secrets () {
   esac
 }
 
-setup_iterm_layouts () {
-  if [ "$(uname -s)" != "Darwin" ] || [ -f iterm/iterm_layouts.yaml.symlink ]
-  then
-    return
-  fi
-  if [ "$DRY_RUN" = true ]
-  then
-    would "create iterm/iterm_layouts.yaml.symlink from the example"
-  else
-    cp iterm/iterm_layouts.yaml.example iterm/iterm_layouts.yaml.symlink
-    success 'iterm layouts config created (edit iterm/iterm_layouts.yaml.symlink to customize)'
-  fi
-}
-
 setup_iterm () {
   if [ "$(uname -s)" != "Darwin" ]
   then
@@ -376,7 +362,6 @@ setup_profile
 setup_gitconfig
 setup_git_hooks
 setup_secrets
-setup_iterm_layouts
 setup_iterm
 setup_claude
 setup_glow

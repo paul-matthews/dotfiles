@@ -49,5 +49,8 @@ brew 'nmap'
 cask 'font-meslo-lg-nerd-font'
 
 # Apps
+# iTerm updates itself (brew bundle won't upgrade an auto_updates cask);
+# wb needs 3.7.5+ for scriptable tab groups and `wb doctor` checks it.
+cask 'iterm2'
 cask 'raycast'
 cask 'visual-studio-code'
