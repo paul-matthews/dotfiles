@@ -47,6 +47,13 @@ may say `crank: pre-fix config moved to ~/.config/crank/config.pre-fix.bak`
 followed by `crank: created ~/.config/crank/config`. If anything asks for a
 password, stop and report; do not retry with `sudo`.
 
+If it ends with `brew bundle failed for: ...`, the installers still ran. Record
+which package failed and carry on with step 3:
+
+```sh
+bin/handoff capture "brew bundle check --verbose --file=Brewfile; brew bundle check --verbose --file=Brewfile.work"
+```
+
 ## 3. Check and report
 
 ```sh
