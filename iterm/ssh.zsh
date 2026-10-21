@@ -1,8 +1,13 @@
 # SSH and Mosh wrappers for visual terminal awareness in iTerm2
 # - Sets tab title to ☁️ <host>
 # - Sets pane watermark badge to REMOTE
-# - Hosts in _TABCOLOR_SSH_TABLE (system/tabcolor-presets.sh) get their own
-#   colours, badge and title; every other host gets warm amber
+# - Hosts in _TABCOLOR_SSH_TABLE get their own colours, badge and title; every
+#   other host gets warm amber. The table is set in the secrets file
+#   (~/.localrc.secrets) so machine names stay out of this public repo, one row
+#   per host:
+#     name|SHORT|emoji|tab R G B|background hex|host globs
+#   Globs are lowercase, matched against the destination with any user@ removed.
+# - Clears the tab's wbGroup, so `wb group` leaves SSH tabs ungrouped
 # - Restores project styling when disconnected
 
 # _ssh_host_row <args...>: the _TABCOLOR_SSH_TABLE row for the first argument
@@ -51,6 +56,7 @@ _iterm_ssh_wrapper() {
     echo -ne "\033]6;1;bg;blue;brightness;${rgb[3]}\a"
     printf "\033]11;#%s\007\033]1337;SetColors=bg=%s\007" "$bg" "$bg"
     printf "\e]1337;SetBadgeFormat=%s\a" "$(echo -n "$badge" | base64)"
+    (( $+functions[_tabcolor_uservars] )) && _tabcolor_uservars "" ""
 
     # Set window & tab title to show remote connection
     print -rn -- $'\e]1;'"${emoji}  ${target}"$'\a\e]2;'"${emoji}  ${target}"$'\a\e]0;'"${emoji}  ${target}"$'\a'

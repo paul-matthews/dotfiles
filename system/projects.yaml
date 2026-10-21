@@ -1,0 +1,154 @@
+# Projects: the single source of truth for tab colours and `wb` workbenches.
+#
+# Edit this file, then nothing else: bin/projects-gen turns it into the zsh
+# cache the shell reads (~/.cache/dotfiles/projects.zsh, regenerated at the
+# next shell start when this file is newer) and into the committed fallback
+# system/projects.gen (run `projects-gen` and commit both; script/test checks
+# they agree).
+#
+# Private projects (work names, real paths) go in the SOPS-encrypted
+# projects.private.sops.yaml instead (secrets pull decrypts it to
+# ~/.config/dotfiles/projects.private.yaml); same format, read after this file.
+#
+# Rows are matched in file order, first match wins, so list specific paths
+# before general ones (la-casa before pi, cosmic-clock before docker).
+#
+#   <preset>:
+#     short:    3 characters for the tab badge (up to 8 only if needed)
+#     emoji:    one emoji
+#     name:     display name; the tab group reads "<emoji> <name>"
+#     tag:      home | work; omit for every machine
+#     globs:    lowercase, matched against the lowercased working directory
+#     root:     optional project directory for `wb <preset>`; when omitted, the
+#               first directory matching a glob under $PROJECTS/*, $PROJECTS/*/*
+#               or ~/* is used
+#     template: optional tab roles for `wb`, default [ai, control]
+#     palette:  8 "R G B" tab colours (per-tab rotation picks one by shell PID),
+#               or `base: "R G B"` to derive 8 around one colour
+#
+# A repo's .envrc may still `export TABCOLOR_PRESET=<preset>` to override.
+
+cosmic:
+  short: COS
+  emoji: "🪐"
+  name: Cosmic Clock
+  tag: home
+  globs: ["*/cosmic-clock*"]
+  template: [ai, control, run]
+  palette: ["100 100 220", "130 80 200", "80 120 210", "160 90 180",
+            "70 140 220", "110 70 190", "90 160 200", "140 100 210"]
+
+sandbox:
+  short: SBX
+  emoji: "🧪"
+  name: Sandbox
+  tag: home
+  globs: ["*/claude-sandbox*"]
+  palette: ["210 180 60", "200 170 70", "220 190 50", "190 160 80",
+            "215 185 55", "205 175 65", "225 195 45", "195 165 75"]
+
+picotools:
+  short: PIC
+  emoji: "🔧"
+  name: Pico Tools
+  tag: home
+  globs: ["*/pico-tools*"]
+  palette: ["50 190 190", "60 200 180", "40 180 200", "70 210 170",
+            "55 195 195", "45 185 205", "65 205 175", "50 195 185"]
+
+spectra:
+  short: SPE
+  emoji: "🌈"
+  name: Spectra
+  tag: home
+  globs: ["*/spectra*"]
+  palette: ["200 80 160", "180 60 180", "220 90 140", "190 70 170",
+            "210 100 150", "170 60 190", "230 80 130", "185 75 175"]
+
+dotfiles:
+  short: DOT
+  emoji: "📂"
+  name: Dotfiles
+  globs: ["*/dotfiles*"]
+  palette: ["80 180 80", "60 160 120", "100 190 60", "70 170 100",
+            "90 200 80", "50 180 140", "110 170 70", "80 190 110"]
+
+android:
+  short: AND
+  emoji: "📱"
+  name: Android
+  tag: home
+  globs: ["*/android*"]
+  palette: ["61 220 132", "80 200 150", "50 210 170", "90 190 130",
+            "70 220 160", "60 200 140", "100 210 120", "80 220 145"]
+
+herd:
+  short: HRD
+  emoji: "🐑"
+  name: Herd
+  tag: home
+  globs: ["*/herd*"]
+  palette: ["200 150 80", "190 140 90", "210 160 70", "180 130 100",
+            "205 155 75", "195 145 85", "215 165 65", "185 135 95"]
+
+planner:
+  short: PLN
+  emoji: "📆"
+  name: Planner Tools
+  tag: home
+  globs: ["*/planner-tools*"]
+  palette: ["180 110 120", "190 120 110", "170 100 130", "200 130 100",
+            "185 115 125", "175 105 135", "195 125 105", "180 115 115"]
+
+lacasa:
+  short: CAS
+  emoji: "🏡"
+  name: La Casa
+  tag: home
+  globs: ["*/la-casa*"]
+  palette: ["150 165 70", "140 155 80", "160 175 60", "130 150 85",
+            "155 170 65", "145 160 75", "165 180 55", "135 155 80"]
+
+pi:
+  short: RPI
+  emoji: "🍓"
+  name: Pi
+  tag: home
+  globs: ["*/src/pi", "*/src/pi/*"]
+  palette: ["175 40 100", "165 35 110", "185 45 90", "160 40 115",
+            "180 50 95", "170 30 105", "190 40 85", "165 45 105"]
+
+m5stack:
+  short: M5S
+  emoji: "📟"
+  name: M5Stack
+  tag: home
+  globs: ["*/m5stack*"]
+  palette: ["240 110 30", "230 100 40", "250 120 25", "225 105 45",
+            "245 115 35", "235 95 30", "250 125 40", "230 110 35"]
+
+toolroll:
+  short: TRL
+  emoji: "🧰"
+  name: Tool Roll
+  globs: ["*/tool-roll*"]
+  palette: ["140 150 165", "130 140 160", "150 160 170", "125 135 155",
+            "145 155 175", "135 145 160", "155 165 180", "140 145 165"]
+
+aiworkspace:
+  short: AIW
+  emoji: "🧠"
+  name: AI Workspace
+  tag: home
+  globs: ["*/ai-workspace*"]
+  palette: ["170 200 240", "160 190 235", "180 210 245", "155 185 230",
+            "175 205 250", "165 195 240", "185 215 250", "160 200 235"]
+
+docker:
+  short: DOC
+  emoji: "🐳"
+  name: Docker
+  tag: home
+  globs: ["*/src/docker", "*/src/docker/*"]
+  palette: ["70 130 190", "80 140 200", "60 120 180", "90 150 210",
+            "75 135 195", "65 125 185", "85 145 205", "70 140 190"]

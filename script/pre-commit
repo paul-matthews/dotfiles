@@ -10,6 +10,7 @@
 #      path, hostname or work-internal name kept in secrets can never be
 #      pasted into a plaintext file. The list comes from the machine's own
 #      secrets and is never committed itself.
+#   5. a project root (real path) from the decrypted private projects file
 #
 # Never bypass this with --no-verify; fix the commit instead.
 
@@ -58,6 +59,18 @@ if [[ -r "$SECRETS_DEC" ]]; then
       break
     fi
   done < <(sed -nE "s/^[[:space:]]*(export |alias )?[A-Za-z_][A-Za-z0-9_]*=['\"]?([^'\"]+)['\"]?[[:space:]]*$/\2/p" "$SECRETS_DEC")
+fi
+
+# 5. Real paths from the private projects file (its `root:` lines)
+PROJECTS_PRIVATE="${PROJECTS_PRIVATE:-$HOME/.config/dotfiles/projects.private.yaml}"
+if [[ -r "$PROJECTS_PRIVATE" ]]; then
+  while IFS= read -r val; do
+    [[ ${#val} -lt 6 ]] && continue
+    if grep -qF -- "$val" <<<"$staged_added"; then
+      block "staged content contains a project root from the private projects file"
+      break
+    fi
+  done < <(sed -nE "s/^[[:space:]]*root:[[:space:]]*['\"]?([^'\"#]*[^'\"#[:space:]])['\"]?[[:space:]]*(#.*)?$/\1/p" "$PROJECTS_PRIVATE")
 fi
 
 if [[ $fail -ne 0 ]]; then

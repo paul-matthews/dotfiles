@@ -1,0 +1,208 @@
+#!/usr/bin/env -S uv run --quiet --script
+# /// script
+# requires-python = ">=3.11"
+# dependencies = ["PyYAML>=6"]
+# ///
+"""projects-gen: turn system/projects.yaml (+ the private projects file) into
+the zsh cache the tab colour engine and `wb` read, so no shell ever parses YAML.
+
+  projects-gen            write ~/.cache/dotfiles/projects.zsh from the public
+                          and private files (the private one only if present)
+  projects-gen --committed
+                          write system/projects.gen from the public file alone:
+                          the fallback for a machine with no cache and no uv
+  projects-gen --check    validate only
+  projects-gen --stdout [--public-only]
+                          print instead of writing (script/test compares this
+                          with the committed file)
+
+Options: --public FILE, --private FILE, --out FILE (default paths otherwise).
+Exit: 0 ok, 1 invalid input, 2 usage.
+"""
+
+import os
+import re
+import sys
+from pathlib import Path
+
+import yaml
+
+ROOT = Path(__file__).resolve().parent.parent
+PUBLIC = ROOT / "system" / "projects.yaml"
+PRIVATE = Path.home() / ".config" / "dotfiles" / "projects.private.yaml"
+CACHE = Path.home() / ".cache" / "dotfiles" / "projects.zsh"
+COMMITTED = ROOT / "system" / "projects.gen"
+
+TAGS = {"home", "work", "darwin", "linux", "pi"}
+KEYS = {"short", "emoji", "name", "tag", "globs", "root", "template", "palette", "base"}
+NAME_RE = re.compile(r"^[a-z][a-z0-9_-]*$")
+ROLE_RE = re.compile(r"^[a-z][a-z0-9-]*$")
+# Offsets around a base colour, for rows that give `base:` instead of 8 colours
+BASE_OFFSETS = [(0, 0, 0), (-15, -10, 10), (15, 10, -10), (-25, -15, 15),
+                (10, 15, 5), (-10, 5, -15), (20, -5, 10), (-5, 10, -5)]
+
+
+class UniqueKeyLoader(yaml.SafeLoader):
+    """SafeLoader that refuses duplicate keys instead of keeping the last."""
+
+    def construct_mapping(self, node, deep=False):
+        seen = set()
+        for key_node, _ in node.value:
+            key = self.construct_object(key_node, deep=deep)
+            if key in seen:
+                raise yaml.constructor.ConstructorError(
+                    None, None, f"duplicate key {key!r}", key_node.start_mark)
+            seen.add(key)
+        return super().construct_mapping(node, deep)
+
+
+def rgb(value, where):
+    parts = str(value).split()
+    if len(parts) != 3 or not all(p.isdigit() and 0 <= int(p) <= 255 for p in parts):
+        raise ValueError(f"{where}: '{value}' is not \"R G B\" with 0-255 values")
+    return tuple(int(p) for p in parts)
+
+
+def load(path, errors):
+    try:
+        data = yaml.load(path.read_text(encoding="utf-8"), Loader=UniqueKeyLoader) or {}
+    except (OSError, yaml.YAMLError) as e:
+        errors.append(f"{path}: {e}")
+        return []
+    if not isinstance(data, dict):
+        errors.append(f"{path}: expected a mapping of presets")
+        return []
+    rows = []
+    for preset, row in data.items():
+        where = f"{path.name}: {preset}"
+        try:
+            rows.append(check(str(preset), row, where))
+        except ValueError as e:
+            errors.append(str(e))
+    return rows
+
+
+def check(preset, row, where):
+    if not NAME_RE.match(preset):
+        raise ValueError(f"{where}: preset names are lowercase letters, digits, - and _")
+    if not isinstance(row, dict):
+        raise ValueError(f"{where}: expected a mapping")
+    unknown = set(row) - KEYS
+    if unknown:
+        raise ValueError(f"{where}: unknown key(s) {', '.join(sorted(unknown))}")
+    for key in ("short", "emoji", "name", "globs"):
+        if not row.get(key):
+            raise ValueError(f"{where}: '{key}' is required")
+    short = str(row["short"])
+    if not 1 <= len(short) <= 8 or not short.isalnum():
+        raise ValueError(f"{where}: short '{short}' must be 1-8 letters or digits")
+    tag = row.get("tag") or ""
+    if tag and tag not in TAGS:
+        raise ValueError(f"{where}: tag '{tag}' is not one of {', '.join(sorted(TAGS))}")
+    globs = row["globs"]
+    if isinstance(globs, str) or not all(isinstance(g, str) and g for g in globs):
+        raise ValueError(f"{where}: globs must be a list of strings")
+    for g in globs:
+        if g != g.lower() or " " in g:
+            raise ValueError(f"{where}: glob '{g}' must be lowercase with no spaces")
+    template = row.get("template") or ["ai", "control"]
+    if isinstance(template, str) or not all(isinstance(r, str) and ROLE_RE.match(r) for r in template):
+        raise ValueError(f"{where}: template must be a list of lowercase role names")
+    if template.count("ai") > 1:
+        raise ValueError(f"{where}: template has more than one ai tab")
+    if ("palette" in row) == ("base" in row):
+        raise ValueError(f"{where}: give exactly one of 'palette' (8 colours) or 'base'")
+    if "palette" in row:
+        palette = [rgb(c, where) for c in row["palette"]]
+        if len(palette) != 8:
+            raise ValueError(f"{where}: palette has {len(palette)} colours, expected 8")
+    else:
+        r, g, b = rgb(row["base"], where)
+        palette = [tuple(min(255, max(0, c + d)) for c, d in zip((r, g, b), off))
+                   for off in BASE_OFFSETS]
+    group = tuple(round(sum(c[i] for c in palette) / 8) for i in range(3))
+    root = str(row.get("root") or "")
+    if " " in root:
+        raise ValueError(f"{where}: root must not contain spaces")
+    return {
+        "preset": preset, "short": short, "emoji": str(row["emoji"]),
+        "name": str(row["name"]), "tag": tag, "globs": " ".join(globs),
+        "root": root, "template": " ".join(template),
+        "palette": "|".join(" ".join(map(str, c)) for c in palette),
+        "group": " ".join(map(str, group)),
+    }
+
+
+def q(s):
+    """Quote for zsh: single quotes, with embedded ones closed and escaped."""
+    return "'" + s.replace("'", "'\\''") + "'"
+
+
+def render(rows, sources):
+    out = [f"# Generated by bin/projects-gen from {', '.join(sources)}. Do not edit;",
+           "# edit the YAML and run projects-gen. Sourced by system/tabcolor.zsh.",
+           "typeset -ga _TC_ORDER=(" + " ".join(r["preset"] for r in rows) + ")"]
+    fields = [("SHORT", "short"), ("EMOJI", "emoji"), ("NAME", "name"), ("TAG", "tag"),
+              ("GLOBS", "globs"), ("ROOT", "root"), ("TEMPLATE", "template"),
+              ("PALETTE", "palette"), ("GROUP_RGB", "group")]
+    for var, key in fields:
+        pairs = " ".join(f"{r['preset']} {q(r[key])}" for r in rows)
+        out.append(f"typeset -gA _TC_{var}=({pairs})")
+    return "\n".join(out) + "\n"
+
+
+def main(argv):
+    args = list(argv)
+    opts = {"--public": PUBLIC, "--private": PRIVATE, "--out": None}
+    flags = set()
+    while args:
+        a = args.pop(0)
+        if a in opts and args:
+            opts[a] = Path(os.path.expanduser(args.pop(0)))
+        elif a in ("--committed", "--check", "--stdout", "--public-only"):
+            flags.add(a)
+        elif a in ("-h", "--help"):
+            print(__doc__.strip())
+            return 0
+        else:
+            print(f"projects-gen: unknown argument '{a}' (try --help)", file=sys.stderr)
+            return 2
+
+    public_only = "--committed" in flags or "--public-only" in flags
+    errors = []
+    rows = load(opts["--public"], errors)
+    sources = ["system/projects.yaml"]
+    private = opts["--private"]
+    if not public_only and private.exists():
+        rows += load(private, errors)
+        sources.append("the private projects file")
+
+    seen = {}
+    for r in rows:
+        for key in ("preset", "short"):
+            k = (key, r[key].lower())
+            if k in seen:
+                errors.append(f"{r['preset']}: {key} '{r[key]}' is also used by {seen[k]}")
+            seen[k] = r["preset"]
+    if errors:
+        for e in errors:
+            print(f"projects-gen: {e}", file=sys.stderr)
+        return 1
+    if "--check" in flags:
+        return 0
+
+    text = render(rows, sources)
+    if "--stdout" in flags:
+        sys.stdout.write(text)
+        return 0
+    out = opts["--out"] or (COMMITTED if "--committed" in flags else CACHE)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    tmp = out.with_name(f"{out.name}.{os.getpid()}.tmp")  # shells may race
+    tmp.write_text(text, encoding="utf-8")
+    os.chmod(tmp, 0o600 if not public_only else 0o644)
+    tmp.replace(out)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

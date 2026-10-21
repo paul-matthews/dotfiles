@@ -1,0 +1,14 @@
+# Example for projects.private.sops.yaml: projects whose names or paths must not
+# appear in this public repo. Same format as system/projects.yaml, read after it.
+#
+#   Edit:   secrets pull; $EDITOR ~/.config/dotfiles/projects.private.yaml; secrets push
+#   Then:   commit projects.private.sops.yaml (encrypted whole, names included)
+
+example:
+  short: EXM
+  emoji: "🔒"
+  name: Example Work Project
+  tag: work
+  globs: ["*/example-work*"]
+  root: ~/src/example-work
+  base: "120 140 200"
