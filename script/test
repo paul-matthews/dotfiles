@@ -312,6 +312,18 @@ done
 ) && ok "_git_configure_work_hosts overrides user.email only for matching work remotes" \
   || bad "_git_configure_work_hosts failed remote URL matching check"
 
+# toolroll/install.sh once wrote a dotfiles_has_tag into the crank config that
+# compared its own argument instead of the tag; it now rewrites such a file.
+# A skip, not a failure, so the pull that brings the fix is not rolled back.
+ccfg="$HOME/.config/crank/config"
+if [[ ! -f "$ccfg" ]]; then
+  skp "crank config dotfiles_has_tag" "no ~/.config/crank/config"
+elif grep -q 'dotfiles_has_tag()' "$ccfg" && ! grep -qF '[[ "$1" ==' "$ccfg"; then
+  skp "crank config dotfiles_has_tag" "pre-fix config pending a rewrite, run: zsh -ic toolroll/install.sh"
+else
+  ok "crank config has no pre-fix dotfiles_has_tag"
+fi
+
 if [[ "$expected_profile" == "work" && -f "$HOME/.gitconfig.work.user" ]]; then
   work_email="$(git config -f "$HOME/.gitconfig.work.user" user.email 2>/dev/null)"
   dotfiles_email="$(git -C "$DOTFILES_ROOT" config user.email 2>/dev/null)"

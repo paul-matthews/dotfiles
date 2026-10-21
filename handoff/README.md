@@ -74,6 +74,22 @@ a secrets recipient. You will be told to run the runbook again. Everything in it
 idempotent, so the second run simply picks up what became possible, usually
 `secrets` decrypting. Report the same way.
 
+Once a work Mac has run `handoff/work-darwin-final.md`, it is in the steady state.
+
+## Steady state
+
+The machine lives on `master` and never commits. To take any update:
+
+```sh
+gsp        # pulls, syncs secrets, runs script/test; nothing local, so nothing pushed
+reload!
+```
+
+New secrets arrive with the pull (`gsp` runs `secrets pull`). New packages do
+not: when `script/test` shows a `not installed` skip, run
+`zsh -ic 'HOMEBREW_BUNDLE_NO_UPGRADE=1 script/install'`. `from/<id>` is used
+again only if a new runbook is issued.
+
 ## Machine id
 
 `bin/handoff id` prints it and creates it on first use: `<profile>-<os>-<6 random
