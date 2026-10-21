@@ -34,16 +34,25 @@ is_pi () {
   [ -r "$HOME/.dotfiles-tags" ] && grep -qx pi "$HOME/.dotfiles-tags"
 }
 
+# A failed bundle (one package that will not install) must not stop the
+# */install.sh installers below; it is reported and fails the run at the end
+brew_failed=""
+bundle () {
+  echo "› brew bundle ($1)"
+  brew bundle --file="$1" || {
+    warn "brew bundle ($1) failed; continuing with the installers"
+    brew_failed="$brew_failed $1"
+  }
+}
+
 install_macos () {
   sh homebrew/install.sh
-  echo "› brew bundle (Brewfile)"
-  brew bundle --file=Brewfile
+  bundle Brewfile
 
   local extra="Brewfile.$(profile)"
   if [ -f "$extra" ]
   then
-    echo "› brew bundle ($extra)"
-    brew bundle --file="$extra"
+    bundle "$extra"
   fi
 }
 
@@ -112,3 +121,9 @@ esac
 
 # find the installers and run them iteratively
 find . -name install.sh -not -path './vendor/*' | while read -r installer ; do sh -c "${installer}" ; done
+
+if [ -n "$brew_failed" ]
+then
+  warn "brew bundle failed for:$brew_failed (see: brew bundle check --verbose --file=<file>)"
+  exit 1
+fi

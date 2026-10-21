@@ -49,6 +49,16 @@ if [ -z "$found" ]; then
   exit 0
 fi
 
+# A config written before the heredoc escaped "$1" has a dotfiles_has_tag that
+# compares the installer's own argument, not the tag: back it up and rewrite it
+_ccfg="$HOME/.config/crank/config"
+if [ -d "$found/tools/crank" ] && [ -f "$_ccfg" ] && grep -q 'dotfiles_has_tag()' "$_ccfg" && ! grep -qF '[[ "$1" ==' "$_ccfg"; then
+  case "${1:-}" in
+    -n|--dry-run) info "crank: would rewrite pre-fix ~/.config/crank/config (backup: config.pre-fix.bak)" ;;
+    *) mv "$_ccfg" "$_ccfg.pre-fix.bak" && info "crank: pre-fix config moved to ~/.config/crank/config.pre-fix.bak" ;;
+  esac
+fi
+
 # Ensure ~/.config/crank/config exists with this machine's realm
 if [ -d "$found/tools/crank" ] && [ ! -f "$HOME/.config/crank/config" ]; then
   p="home"

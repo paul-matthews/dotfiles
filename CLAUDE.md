@@ -32,7 +32,7 @@ A file is sourced only if every tag in its name is one of this machine's tags. `
 - `script/bootstrap` — links symlinks, records the profile, installs the pre-commit hook; additive and idempotent, `--dry-run` shows what it would do
 - `script/pre-commit` — installed as the repo's git hook; blocks private keys, unencrypted secrets files and values from `~/.localrc.secrets`
 - `script/setup` — the one command for a new or existing machine: bootstrap, install, bootstrap again (secrets), test
-- `bin/handoff` + `handoff/` — runbooks and reporting helpers for work machines driven by an agent with no chat channel; they commit to `from/<machine-id>`, never master, and reports are SOPS-encrypted. Keep the runbooks in step with any bootstrap or setup change
+- `bin/handoff` + `handoff/` — runbooks and reporting helpers for work machines driven by an agent with no chat channel; they commit to `from/<machine-id>`, never master, and reports are SOPS-encrypted. After `handoff/work-darwin-final.md` a work Mac is in steady state: on `master`, updated with `gsp` + `reload!` (README "Steady state"). Keep the runbooks in step with any bootstrap or setup change
 - `script/test` — starts a fresh interactive zsh in a pseudo-terminal and checks the promises below; `gsp` verifies against it (cache-aware)
 - `script/test-gsp` — scenario test harness for `gsp` auto-merge in throwaway repos (not run by `gsp`)
 - `script/install` — packages: `brew bundle` on the core `Brewfile` then `Brewfile.<profile>` (`Brewfile.home` / `Brewfile.work`) on macOS; `linux/packages.txt` plus `linux/packages.pi.txt` via apt on any apt-based Linux (`name|fallback` per line); then every `*/install.sh`
@@ -101,7 +101,7 @@ Run `script/test`. It starts a fresh interactive zsh under a pseudo-terminal and
 3. `PATH` contains neither `./bin` nor `/Users/holman/`
 4. `DOTFILES_PROFILE` matches `~/.dotfiles-profile` and `DOTFILES_TAGS` carries the profile and OS; work-only files stay unloaded on a home profile
 5. topic functions are defined: `tabcolor`, `gwa`, `cpush`, `role`, and the `reload!` and `gsp` aliases; every registered AI tool is a wrapper function when installed and undefined when not; `dotfiles_has_tag` answers correctly, also under `DOTFILES_SAFE=1`, which otherwise gives a shell with none of them
-6. no references to the old `Code` projects directory remain, `bin/` is not gitignored, every tracked zsh file parses, files removed by a phase stay gone, and `_git_configure_work_hosts` overrides `user.email` only on matching work remotes while keeping the personal email on GitHub repos
+6. no references to the old `Code` projects directory remain, `bin/` is not gitignored, every tracked zsh file parses, files removed by a phase stay gone, and `_git_configure_work_hosts` overrides `user.email` only on matching work remotes while keeping the personal email on GitHub repos; `~/.config/crank/config` has no pre-fix `dotfiles_has_tag` (skipped while a rewrite is pending, so `gsp` never rolls back for it)
 7. `script/bootstrap --dry-run` has nothing left to do, and the pre-commit hook is installed and blocks a private key and a value from an indented line of the secrets file
 8. secrets are decrypted and in sync, and `secrets push` refuses to overwrite a repo file that changed since the last pull
 
