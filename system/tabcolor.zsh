@@ -179,7 +179,7 @@ _tabcolor_root() {
   REPLY=""
   local root="${_TC_ROOT[$1]}" d g
   if [[ -n "$root" ]]; then
-    REPLY="${~root}"
+    REPLY="${root/#\~/$HOME}"
     [[ -d "$REPLY" ]]
     return
   fi
