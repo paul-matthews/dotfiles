@@ -19,7 +19,7 @@ Tab colour, title and badge follow the project: `.envrc` preset first, else the 
 - `role device` → tab reads `🪐 COS / device`; `role` clears; `role -s` shows (`rgit`, `rbuild`, `rdevice`, `rclear`)
 - `claude` / `agy` (and `jc` / `jetski` at work) → darkened project colour, 🤖 title, project/role badge preserved; restored on exit
 - `ssh host` → amber tab while connected, project colour back after
-- `wb <project>` → AI + control tabs (+ run) in one iTerm tab group; `wb group`, `wb add`, `wb move`, `wb focus`, `wb ls`, `wb doctor`
+- `wb <project>` → AI + control tabs (+ run) in one iTerm tab group (adopting this tab; `-n` for new tabs, `-w` for new window); `wb group`, `wb add`, `wb move`, `wb focus`, `wb ls`, `wb doctor`
 - `gsp` → verified pull & push: auto-resolves declared trivial conflicts, verifies with cache, pushes if ahead
 
 ---

@@ -97,7 +97,8 @@ ${S}━━━━━━━━━━━━━━━━━━━━━━━━━�
   
   ${H}Workbench${R} ${D}(iTerm2 tab groups, projects in system/projects.yaml)${R}
   ${S}────────────────────────────────────${R}
-  ${C}wb${R} ${Y}<project>${R}            ${G}open AI + control tabs (+ run, per project) in a new group${R}
+  ${C}wb${R} ${Y}<project>${R}            ${G}open AI + control tabs (+ run) in a new group, adopting this tab${R}
+  ${C}wb${R} ${Y}<project>${R} ${Y}-n${R}         ${G}open all new tabs, preserving this tab${R}
   ${C}wb${R} ${Y}<project>${R} ${Y}-w${R}         ${G}same, in a new window${R}
   ${C}wb${R}                      ${G}same, for the project you are in${R}
   ${C}wb group${R}                ${G}group this window's tabs by project${R}

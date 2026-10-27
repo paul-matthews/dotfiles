@@ -10,7 +10,8 @@ work), a control tab for git and tests, sometimes a run tab. `wb` opens that
 set in a named, coloured iTerm tab group and keeps tabs filed by project.
 
 ```sh
-wb cosmic          # 🪐 Cosmic Clock: AI + control + run tabs, new group, this window
+wb cosmic          # 🪐 Cosmic Clock: this tab becomes control, opens AI + run tabs in a new group
+wb cosmic -n       # open all tabs as new tabs, preserving this tab
 wb cosmic -w       # the same in a new window
 wb                 # the project you are in (a worktree gets "· <branch>" in the name)
 wb group           # file this window's ungrouped or misfiled tabs by project
@@ -22,10 +23,7 @@ wb ls              # groups and tabs in every window
 wb doctor          # what is missing, if anything
 ```
 
-Running `wb cosmic` again opens a second set; it never reuses a group. Tabs
-join a group only when you run `wb`: a `cd` changes a tab's colour, not its
-group. `wb group` leaves a tab alone if it is already in a group of its
-project's name, so a second set and tabs added by hand stay where they are.
+Running `wb cosmic` adopts the current tab as the first non-AI tab (`control`), changes into the project directory, and opens the remaining template tabs in a new group; pass `-n` (`--new-tabs`) to preserve the current tab and open all tabs fresh. Tabs join a group only when you run `wb`: a `cd` changes a tab's colour, not its group. `wb group` leaves a tab alone if it is already in a group of its project's name, so a second set and tabs added by hand stay where they are.
 
 ### Projects
 

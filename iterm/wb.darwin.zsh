@@ -1,9 +1,12 @@
 # wb — workbench: a project's tabs in one iTerm tab group.
 #
-#   wb [<project>|.] [-w]   open the project's template tabs (default: AI + control)
-#                           in a new group; -w puts them in a new window. Each tab
-#                           starts in the project directory; only the AI tab runs
-#                           anything ($DOTFILES_AI_TOOL). Again = a second set.
+#   wb [<project>|.] [-w|-n]
+#                           open the project's template tabs (default: AI + control)
+#                           in a new group, adopting this tab as the first non-AI tab;
+#                           -n (--new-tabs) opens all new tabs and leaves this tab alone;
+#                           -w (--window) puts them in a new window. Each tab starts in
+#                           the project directory; only the AI tab runs anything
+#                           ($DOTFILES_AI_TOOL).
 #   wb group                file this window's tabs into groups by project
 #   wb add [<project>]      put this tab in its project's group (or the named one)
 #   wb move [N]             move this tab's group to a new window, or window N
@@ -59,10 +62,11 @@ _wb_py() {
 }
 
 _wb_start() {
-  local arg="" newwin=0 a preset wt="" dir
+  local arg="" newwin=0 newtabs=0 a preset wt="" dir
   for a in "$@"; do
     case "$a" in
       -w|--window) newwin=1 ;;
+      -n|--new-tabs) newtabs=1 ;;
       -*) print -u2 "wb: unknown option $a"; return 2 ;;
       *) [[ -n "$arg" ]] && { print -u2 "wb: one project at a time"; return 2; }; arg="$a" ;;
     esac
@@ -88,7 +92,19 @@ _wb_start() {
   local -a opts=(--name "$REPLY" --color "${_TC_GROUP_RGB[$preset]}" --dir "$dir"
                  --roles "${_TC_TEMPLATE[$preset]}" --ai "${DOTFILES_AI_TOOL:-claude}")
   (( newwin )) && opts+=(--new-window)
-  _wb_py start "${opts[@]}"
+  (( newtabs )) && opts+=(--new-tabs)
+  _wb_py start "${opts[@]}" || return
+  if (( ! newwin && ! newtabs )); then
+    local -a roles=(${=_TC_TEMPLATE[$preset]}) non_ai
+    non_ai=(${roles:#ai})
+    local first_role="${non_ai[1]:-${roles[1]}}"
+    builtin cd -- "$dir" || return 1
+    if [[ "$first_role" == "ai" ]]; then
+      eval "${DOTFILES_AI_TOOL:-claude}"
+    else
+      role "$first_role" >/dev/null
+    fi
+  fi
 }
 
 _wb_doctor() {
@@ -174,7 +190,7 @@ _wb_doctor() {
 
 wb() {
   case "${1:-}" in
-    -h|--help|help) sed -n '3,15p' "$_TC_DOTFILES/iterm/wb.darwin.zsh" | sed 's/^# \{0,1\}//' ;;
+    -h|--help|help) sed -n '3,16p' "$_TC_DOTFILES/iterm/wb.darwin.zsh" | sed 's/^# \{0,1\}//' ;;
     doctor) _wb_doctor ;;
     group)  shift; _wb_py group "$@" ;;
     ls)     shift; _wb_py ls "$@" ;;

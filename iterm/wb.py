@@ -10,7 +10,7 @@ arguments; nothing here knows a project name or path.
 Tabs say which project they belong to through the iTerm user variables
 wbGroup and wbColor, set by the tab colour engine (system/tabcolor.zsh).
 
-  start  --name N --color "R G B" --dir D --roles "ai control" --ai TOOL [--new-window]
+  start  --name N --color "R G B" --dir D --roles "ai control" --ai TOOL [--new-window|--new-tabs]
   group                 group this window's tabs by their wbGroup
   add    [--name N --color C]
                         put this tab in its project's group (or the named one)
@@ -84,6 +84,22 @@ def pick_group(groups, name, mine=None):
     return next((g["id"] for g in groups if g["name"] == name), None)
 
 
+def plan_start_roles(roles, adopt_current=True):
+    """Order roles for `wb start`: when adopting the current tab, the first
+    non-ai role goes first so the existing shell becomes the control tab and
+    AI opens in a new tab. Returns (ordered_roles, create_roles)."""
+    if not adopt_current:
+        return list(roles), list(roles)
+    non_ai = [r for r in roles if r != "ai"]
+    if non_ai:
+        first = non_ai[0]
+        idx = roles.index(first)
+        ordered = [first] + roles[:idx] + roles[idx + 1:]
+    else:
+        ordered = list(roles)
+    return ordered, ordered[1:]
+
+
 def selftest():
     T = lambda i, want, group=None: {"id": i, "want": want, "group": group}
     G = lambda i, name: {"id": i, "name": name}
@@ -114,6 +130,17 @@ def selftest():
     if pick_group(groups, "Z") is not None:
         failed += 1
         print("pick_group: expected None for an unknown name")
+    start_cases = [
+        (["ai", "control"], True, (["control", "ai"], ["ai"])),
+        (["ai", "control", "run"], True, (["control", "ai", "run"], ["ai", "run"])),
+        (["ai"], True, (["ai"], [])),
+        (["ai", "control"], False, (["ai", "control"], ["ai", "control"])),
+    ]
+    for roles, adopt, want in start_cases:
+        got = plan_start_roles(roles, adopt)
+        if got != want:
+            failed += 1
+            print(f"plan_start_roles({roles}, {adopt}): got {got}, want {want}")
     print(f"wb.py selftest: {'ok' if not failed else f'{failed} failed'}")
     return 1 if failed else 0
 
@@ -177,11 +204,13 @@ async def refreshed_window(app, window_id):
 
 async def cmd_start(conn, app, a):
     import iterm2
-    _, window, _ = locate(app, a["session"])
+    _, window, cur_tab = locate(app, a["session"])
     profile = iterm2.LocalWriteOnlyProfile()
     profile.set_initial_directory_mode(iterm2.InitialWorkingDirectory.INITIAL_WORKING_DIRECTORY_CUSTOM)
     profile.set_custom_directory(a["dir"])
-    roles = a["roles"].split()
+    raw_roles = a["roles"].split()
+    adopt_current = not a.get("new-window") and not a.get("new-tabs")
+    roles, roles_left = plan_start_roles(raw_roles, adopt_current)
     tabs = []
     if a.get("new-window"):
         window = await iterm2.Window.async_create(conn, profile_customizations=profile)
@@ -189,14 +218,16 @@ async def cmd_start(conn, app, a):
             die("iTerm did not create a window")
         tabs.append(window.current_tab)
         roles_left = roles[1:]
-    else:
-        roles_left = roles
+    elif adopt_current:
+        tabs.append(cur_tab)
     for _ in roles_left:
         tab = await window.async_create_tab(profile_customizations=profile, select=False)
         if tab is None:
             die("iTerm did not create a tab")
         tabs.append(tab)
-    for role, tab in zip(roles, tabs):
+    for idx, (role, tab) in enumerate(zip(roles, tabs)):
+        if adopt_current and idx == 0:
+            continue
         text = f"{a['ai']}\n" if role == "ai" else f" role {role} >/dev/null\n"
         await tab.current_session.async_send_text(text)
     window = await refreshed_window(app, window.window_id)
@@ -347,7 +378,7 @@ async def cmd_ping(conn, app, a):
 VERBS = {"start": cmd_start, "group": cmd_group, "add": cmd_add, "move": cmd_move,
          "focus": cmd_focus, "ls": cmd_ls, "ping": cmd_ping}
 VALUE_OPTS = {"session", "name", "color", "dir", "roles", "ai", "to", "preset"}
-FLAG_OPTS = {"new-window", "json"}
+FLAG_OPTS = {"new-window", "new-tabs", "json"}
 
 
 def parse(argv):
