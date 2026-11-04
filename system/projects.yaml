@@ -19,7 +19,8 @@
 #     name:     display name; the tab group reads "<emoji> <name>"
 #     tag:      home | work; omit for every machine
 #     globs:    lowercase, matched against the lowercased working directory
-#     root:     optional project directory for `wb <preset>`; when omitted, the
+#     root:     optional project directory (or list of candidate directories,
+#               first existing wins) for `wb <preset>`; when omitted, the
 #               first directory matching a glob under $PROJECTS/*, $PROJECTS/*/*
 #               or ~/* is used
 #     template: optional tab roles for `wb`, default [ai, control]

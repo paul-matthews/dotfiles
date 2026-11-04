@@ -70,7 +70,46 @@ if [[ -r "$PROJECTS_PRIVATE" ]]; then
       block "staged content contains a project root from the private projects file"
       break
     fi
-  done < <(sed -nE "s/^[[:space:]]*root:[[:space:]]*['\"]?([^'\"#]*[^'\"#[:space:]])['\"]?[[:space:]]*(#.*)?$/\1/p" "$PROJECTS_PRIVATE")
+  done < <(awk '
+    function clean(s) {
+      sub(/#.*$/, "", s)
+      gsub(/^[[:space:]'\''"]+|[[:space:]'\''"]+$/, "", s)
+      return s
+    }
+    /^[[:space:]]*root:[[:space:]]*\[/ {
+      in_root = 0
+      line = $0
+      sub(/^[[:space:]]*root:[[:space:]]*\[/, "", line)
+      sub(/\].*$/, "", line)
+      n = split(line, parts, ",")
+      for (i = 1; i <= n; i++) {
+        v = clean(parts[i])
+        if (v != "") print v
+      }
+      next
+    }
+    /^[[:space:]]*root:[[:space:]]*(#.*)?$/ {
+      in_root = 1
+      next
+    }
+    /^[[:space:]]*root:[[:space:]]*/ {
+      in_root = 0
+      line = $0
+      sub(/^[[:space:]]*root:[[:space:]]*/, "", line)
+      v = clean(line)
+      if (v != "") print v
+      next
+    }
+    in_root && /^[[:space:]]*-[[:space:]]*/ {
+      line = $0
+      sub(/^[[:space:]]*-[[:space:]]*/, "", line)
+      v = clean(line)
+      if (v != "") print v
+      next
+    }
+    in_root && /^[[:space:]]*(#.*)?$/ { next }
+    { in_root = 0 }
+  ' "$PROJECTS_PRIVATE")
 fi
 
 if [[ $fail -ne 0 ]]; then

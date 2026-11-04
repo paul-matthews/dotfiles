@@ -121,9 +121,19 @@ def check(preset, row, where):
         palette = [tuple(min(255, max(0, c + d)) for c, d in zip((r, g, b), off))
                    for off in BASE_OFFSETS]
     group = tuple(round(sum(c[i] for c in palette) / 8) for i in range(3))
-    root = str(row.get("root") or "")
-    if " " in root:
-        raise ValueError(f"{where}: root must not contain spaces")
+    raw_root = row.get("root")
+    if raw_root is None:
+        roots = []
+    elif isinstance(raw_root, str):
+        roots = [raw_root] if raw_root else []
+    elif isinstance(raw_root, list) and all(isinstance(r, str) and r for r in raw_root):
+        roots = raw_root
+    else:
+        raise ValueError(f"{where}: root must be a string or list of strings")
+    for r in roots:
+        if " " in r:
+            raise ValueError(f"{where}: root must not contain spaces")
+    root = " ".join(roots)
     return {
         "preset": preset, "short": short, "emoji": str(row["emoji"]),
         "name": str(row["name"]), "tag": tag, "globs": " ".join(globs),

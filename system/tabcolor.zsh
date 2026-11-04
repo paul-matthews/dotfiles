@@ -172,16 +172,22 @@ _tabcolor_rgb() {
   REPLY="${rgb[1]} ${rgb[2]} ${rgb[3]}"
 }
 
-# _tabcolor_root <preset>: REPLY = the project's directory: `root:` from the
-# YAML, else the first directory under $PROJECTS/*, $PROJECTS/*/* or ~/* that
-# one of its globs matches. Exit 1 when none exists. Not on the prompt path.
+# _tabcolor_root <preset>: REPLY = the project's directory: first existing
+# directory in `root:` from the YAML, else the first directory under
+# $PROJECTS/*, $PROJECTS/*/* or ~/* that one of its globs matches. Exit 1 when
+# none exists. Not on the prompt path.
 _tabcolor_root() {
   REPLY=""
   local root="${_TC_ROOT[$1]}" d g
   if [[ -n "$root" ]]; then
-    REPLY="${root/#\~/$HOME}"
-    [[ -d "$REPLY" ]]
-    return
+    for d in ${=root}; do
+      d="${d/#\~/$HOME}"
+      if [[ -d "$d" ]]; then
+        REPLY="$d"
+        return 0
+      fi
+    done
+    return 1
   fi
   # A candidate counts only if it resolves to this project, so a folder inside
   # another project (dotfiles' own android/ topic) is never taken for it.

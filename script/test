@@ -72,6 +72,7 @@ print -r -- "HOOK_200_MS=$(( int((EPOCHREALTIME - _t0) * 1000) ))"
 _d=$(mktemp -d); mkdir -p $_d/dotfiles/android $_d/a/tool-roll
 PROJECTS=$_d _tabcolor_root android; print -r -- "ROOT_ANDROID=${REPLY#$_d}"
 PROJECTS=$_d _tabcolor_root toolroll; print -r -- "ROOT_TOOLROLL=${REPLY#$_d}"
+_TC_ROOT[probex]="$_d/missing $_d/a/tool-roll"; _tabcolor_root probex; print -r -- "ROOT_MULTI=${REPLY#$_d}"
 rm -rf $_d
 fi
 alias _probe_tool="echo probe-tool-ran"; _AI_TAB_CMDS+=(_probe_tool:PROBE); _ai_tabs_finalize
@@ -260,6 +261,8 @@ v="$(get main TAGGED_OFF)"; w="$(get main TAGGED_ON)"
 [[ -z "$v" && "$w" == probex ]] && ok "a work-tagged project matches only on work machines" || bad "tagged project gave off='$v' on='$w'"
 v="$(get main ROOT_ANDROID)"; w="$(get main ROOT_TOOLROLL)"
 [[ -z "$v" && "$w" == /a/tool-roll ]] && ok "wb project folders: found by glob, never a folder inside another project" || bad "project folder discovery gave android='$v' toolroll='$w'"
+v="$(get main ROOT_MULTI)"
+[[ "$v" == /a/tool-roll ]] && ok "wb project root: first existing directory in a list wins" || bad "multi-root gave '$v', expected /a/tool-roll"
 v="$(get main HOOK_200_MS)"
 [[ -n "$v" && "$v" -lt 150 ]] && ok "precmd hook on an unchanged directory does not fork (200 runs in ${v}ms)" || bad "precmd hook is slow: 200 runs took ${v:-?}ms (forking?)"
 
